@@ -13,7 +13,6 @@ secrets.json
 # 2. AWS CDK EXCLUSIONS
 # ==========================================
 cdk.out/
-.ccdk/
 cdk.context.json
 
 # ==========================================
