@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Signup from './Signup';
 import Login from './Login';
-import StudentProfile from './StudentProfile';
-import InstructorProfile from './InstructorProfile';
+import StudentProfile from './Studentprofile';
+import InstructorProfile from './Instructorprofile';
 
 function App() {
   return (
