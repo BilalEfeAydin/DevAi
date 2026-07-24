@@ -69,3 +69,9 @@ yarn-debug.log*
 yarn-error.log*
 tmp/
 temp/
+
+# ==========================================
+# 7. PROOF OF CONCEPTS (LOCAL ONLY)
+# ==========================================
+bedrock-poc/
+e2b-poc/
