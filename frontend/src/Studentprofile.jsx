@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchUserAttributes, signOut } from 'aws-amplify/auth';
-import { NAVY, NAVY_DARK } from './theme';
+import { NAVY, NAVY_DARK } from './Theme';
 import {
   UserIcon, BookIcon, CapIcon, BellIcon,
   HelpIcon, LogOutIcon, MailIcon,
   MenuIcon, SettingsIcon
-} from './icons';
+} from './Icons';
 
 // Styles CSS pour les cartes et la sidebar
 const hoverCSS = `

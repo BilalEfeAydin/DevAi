@@ -1,4 +1,4 @@
-import { styles } from './theme';
+import { styles } from './Theme';
 
 // Placeholder page — replace with the real instructor dashboard once
 // that feature is built. This exists so /profile/instructor has
