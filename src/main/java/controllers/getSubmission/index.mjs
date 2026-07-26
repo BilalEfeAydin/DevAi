@@ -7,15 +7,15 @@
 //   ?studentId=xxx      -> all submissions for a student (Query on StudentIndex)
 //   ?courseId=xxx       -> all submissions for a course, e.g. teacher view (Query on CourseIndex)
 
-const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, GetCommand, QueryCommand } = require("@aws-sdk/lib-dynamodb");
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = process.env.TABLE_NAME || "DevAi-Submissions";
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   try {
     const params = event.queryStringParameters || {};
     const { submissionId, studentId, courseId } = params;
@@ -23,7 +23,7 @@ exports.handler = async (event) => {
     if (submissionId) {
       const result = await ddb.send(new GetCommand({
         TableName: TABLE_NAME,
-        Key: { submissionId },
+        Key: { SubmissionID: submissionId },
       }));
       if (!result.Item) return respond(404, { message: "Submission not found" });
       return respond(200, result.Item);
@@ -33,7 +33,7 @@ exports.handler = async (event) => {
       const result = await ddb.send(new QueryCommand({
         TableName: TABLE_NAME,
         IndexName: "StudentIndex",
-        KeyConditionExpression: "studentId = :sid",
+        KeyConditionExpression: "StudentID = :sid",
         ExpressionAttributeValues: { ":sid": studentId },
       }));
       return respond(200, result.Items);
@@ -43,7 +43,7 @@ exports.handler = async (event) => {
       const result = await ddb.send(new QueryCommand({
         TableName: TABLE_NAME,
         IndexName: "CourseIndex",
-        KeyConditionExpression: "courseId = :cid",
+        KeyConditionExpression: "CourseID = :cid",
         ExpressionAttributeValues: { ":cid": courseId },
       }));
       return respond(200, result.Items);

@@ -1,13 +1,17 @@
-const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, PutCommand } = require("@aws-sdk/lib-dynamodb");
-const { randomUUID } = require("crypto");
+// Lambda: postSubmission
+// Trigger: API Gateway POST /submissions
+// Env var required: TABLE_NAME = DevAi-Submissions
+
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { randomUUID } from "crypto";
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = process.env.TABLE_NAME || "DevAi-Submissions";
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   try {
     const body = typeof event.body === "string" ? JSON.parse(event.body) : (event.body || {});
     const { courseId, studentId, content } = body;
@@ -18,20 +22,20 @@ exports.handler = async (event) => {
 
     const now = new Date().toISOString();
     const item = {
-      submissionId: randomUUID(),
-      courseId,
-      studentId,
+      SubmissionID: randomUUID(),
+      CourseID: courseId,
+      StudentID: studentId,
       content,
       status: "submitted",
-      createdAt: now,
-      updatedAt: now,
+      CreatedAt: now,
+      UpdatedAt: now,
     };
 
     await ddb.send(new PutCommand({
       TableName: TABLE_NAME,
       Item: item,
-      // Safety: never overwrite an existing submissionId (won't happen with UUID, but cheap to keep)
-      ConditionExpression: "attribute_not_exists(submissionId)",
+      // Safety: never overwrite an existing SubmissionID (won't happen with UUID, but cheap to keep)
+      ConditionExpression: "attribute_not_exists(SubmissionID)",
     }));
 
     return respond(201, item);
