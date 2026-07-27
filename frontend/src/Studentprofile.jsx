@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchUserAttributes, signOut } from 'aws-amplify/auth';
-import { NAVY, NAVY_DARK } from './Theme';
+import { NAVY } from './Theme';
+import Sidebar from './Sidebar';
 import {
   UserIcon, BookIcon, CapIcon, BellIcon,
-  HelpIcon, LogOutIcon, MailIcon,
+  HelpIcon, MailIcon,
   MenuIcon, SettingsIcon
 } from './Icons';
 
-// Styles CSS pour les cartes et la sidebar
+// Styles CSS pour les cartes (le sidebar a son propre CSS dans Sidebar.jsx)
 const hoverCSS = `
   .infoCard {
     transition: box-shadow 0.15s ease, transform 0.15s ease;
@@ -20,12 +21,6 @@ const hoverCSS = `
   .infoCard.clickable:hover {
     box-shadow: 0 8px 20px rgba(30, 42, 120, 0.18);
     transform: translateY(-2px);
-  }
-  .sidebarOverlay {
-    transition: opacity 0.2s ease;
-  }
-  .sidebar {
-    transition: transform 0.25s ease;
   }
 `;
 
@@ -69,11 +64,11 @@ function StudentProfile() {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
 
-  // Navigation : seulement Profile (actif), My Courses, Help
+  // Navigation : Profile (actif), My Courses (lie vers /courses), Help
   const navItems = [
-    { label: 'Profile', icon: <UserIcon />, active: true, disabled: false },
-    { label: 'My Courses', icon: <BookIcon />, active: false, disabled: true },
-    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true },
+    { label: 'Profile', icon: <UserIcon />, active: true, disabled: false, onClick: undefined },
+    { label: 'My Courses', icon: <BookIcon />, active: false, disabled: false, onClick: () => navigate('/courses') },
+    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
 
   // Statistiques (inchangées)
@@ -83,7 +78,7 @@ function StudentProfile() {
     { label: 'Avg Solution Attempts', value: '1.8 Attempts', icon: <CapIcon /> },
   ];
 
-  // Nouvelles cartes d'information
+  // Cartes d'information
   const infoCards = [
     {
       id: 'role',
@@ -120,50 +115,13 @@ function StudentProfile() {
     <div style={styles.page}>
       <style>{hoverCSS}</style>
 
-      {/* Overlay pour fermer la sidebar */}
-      {sidebarOpen && (
-        <div
-          className="sidebarOverlay"
-          style={styles.overlay}
-          onClick={closeSidebar}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className="sidebar"
-        style={{
-          ...styles.sidebar,
-          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-        }}
-      >
-        <div>
-          <div style={styles.sidebarBrand}>
-            <span style={styles.sidebarBrandIcon}><CapIcon /></span>
-            <div>
-              <div style={styles.sidebarBrandTitle}>DevAI</div>
-              <div style={styles.sidebarBrandSubtitle}>Student Portal</div>
-            </div>
-          </div>
-
-          <nav style={styles.nav}>
-            {navItems.map((item) => (
-              <div
-                key={item.label}
-                style={item.active ? styles.navItemActive : (item.disabled ? styles.navItemDisabled : styles.navItem)}
-                title={item.disabled ? 'Coming soon' : undefined}
-              >
-                <span style={styles.navIcon}>{item.icon}</span>
-                {item.label}
-              </div>
-            ))}
-          </nav>
-        </div>
-
-        <button type="button" onClick={handleLogout} style={styles.logoutButton}>
-          <LogOutIcon /> Log Out
-        </button>
-      </aside>
+      <Sidebar
+        subtitle="Student Portal"
+        navItems={navItems}
+        isOpen={sidebarOpen}
+        onClose={closeSidebar}
+        onLogout={handleLogout}
+      />
 
       {/* Contenu principal */}
       <main style={styles.main}>
@@ -183,7 +141,7 @@ function StudentProfile() {
           </div>
         </header>
 
-        {/* Carte de profil - Alignement corrigé */}
+        {/* Carte de profil */}
         <div style={styles.profileCard}>
           <span style={styles.profileAvatar}>
             {loadingProfile ? '...' : getInitials()}
@@ -211,7 +169,7 @@ function StudentProfile() {
           ))}
         </div>
 
-        {/* Nouvelles cartes d'information */}
+        {/* Cartes d'information */}
         <h3 style={styles.sectionTitle}>Information</h3>
         <div style={styles.infoGrid}>
           {infoCards.map((card) => (
@@ -234,7 +192,7 @@ function StudentProfile() {
   );
 }
 
-// Styles
+// Styles (sidebar retiré -- vit maintenant dans Sidebar.jsx)
 const styles = {
   page: {
     minHeight: '100vh',
@@ -242,54 +200,6 @@ const styles = {
     background: '#f5f7fb',
     fontFamily: 'system-ui, -apple-system, sans-serif',
     position: 'relative',
-  },
-  overlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    zIndex: 999,
-  },
-  sidebar: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '240px',
-    height: '100%',
-    backgroundImage: `linear-gradient(180deg, ${NAVY}, ${NAVY_DARK})`,
-    color: '#fff',
-    padding: '1.5rem 1rem',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    zIndex: 1000,
-    transform: 'translateX(-100%)',
-    transition: 'transform 0.25s ease',
-  },
-  sidebarBrand: { display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0 0.5rem 1.5rem' },
-  sidebarBrandIcon: { display: 'flex' },
-  sidebarBrandTitle: { fontWeight: 800, fontSize: '1.1rem' },
-  sidebarBrandSubtitle: { fontSize: '0.72rem', color: '#c7cdf0' },
-  nav: { display: 'flex', flexDirection: 'column', gap: '0.3rem' },
-  navItem: {
-    display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 0.7rem',
-    borderRadius: '8px', fontSize: '0.9rem', color: '#dbe0fb', cursor: 'pointer',
-  },
-  navItemActive: {
-    display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 0.7rem',
-    borderRadius: '8px', fontSize: '0.9rem', color: '#fff', fontWeight: 700,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  navItemDisabled: {
-    display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 0.7rem',
-    borderRadius: '8px', fontSize: '0.9rem', color: '#7b81ab', cursor: 'not-allowed',
-  },
-  navIcon: { display: 'flex' },
-  logoutButton: {
-    display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'none', border: 'none',
-    color: '#dbe0fb', fontSize: '0.9rem', cursor: 'pointer', padding: '0.6rem 0.7rem',
   },
   main: {
     flex: 1,
@@ -348,15 +258,14 @@ const styles = {
     flexShrink: 0,
     border: `2px solid ${NAVY}`,
   },
-  // Carte de profil modifiée pour aligner le texte avec le haut de l'avatar
   profileCard: {
     backgroundColor: '#fff',
     borderRadius: '14px',
     boxShadow: '0 4px 16px rgba(30,42,120,0.08)',
     padding: '1.5rem',
     display: 'flex',
-    alignItems: 'center', // avatar and text block centered together
-    gap: '0.65rem', // tight spacing, no dead space between avatar and name
+    alignItems: 'center',
+    gap: '0.65rem',
     marginBottom: '1.5rem',
   },
   profileAvatar: {
@@ -373,7 +282,6 @@ const styles = {
     flexShrink: 0,
     border: `2px solid ${NAVY}`,
   },
-  // Conteneur du texte -- pas de marge, aligné directement avec l'avatar
   profileText: {
     display: 'flex',
     flexDirection: 'column',
@@ -391,7 +299,7 @@ const styles = {
     color: '#666',
     display: 'flex',
     alignItems: 'center',
-    gap: '0.35rem', // consistent gap between mail icon and email text
+    gap: '0.35rem',
   },
   statsRow: { display: 'flex', gap: '1rem', marginBottom: '2rem' },
   statCard: {
