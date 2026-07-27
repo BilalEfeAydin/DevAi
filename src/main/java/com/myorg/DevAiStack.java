@@ -61,6 +61,16 @@ public class DevAiStack extends Stack {
                 .description("DynamoDB Courses table ARN")
                 .build();
 
+        CfnOutput.Builder.create(this, "AssignmentsTableName")
+                .value(database.getAssignmentsTable().getTableName())
+                .description("DynamoDB Assignments table name")
+                .build();
+
+        CfnOutput.Builder.create(this, "AssignmentsTableArn")
+                .value(database.getAssignmentsTable().getTableArn())
+                .description("DynamoDB Assignments table ARN")
+                .build();
+
         CfnOutput.Builder.create(this, "SubmissionsTableName")
                 .value(database.getSubmissionsTable().getTableName())
                 .description("DynamoDB Submissions table name")
