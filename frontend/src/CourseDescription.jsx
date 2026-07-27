@@ -13,15 +13,15 @@ import {
 // (e.g. GET /courses/:id/exercises) once that backend piece exists.
 const exercisesByCourse = {
   c1: [
-    { id: 'e1', title: 'Variables & Data Types', badge: 'Fundamentals', description: "Practice declaring variables and using Python's core data types.", maxAttempts: 5 },
-    { id: 'e2', title: 'Loops & Conditionals', badge: 'Control Flow', description: 'Implement common loop and conditional patterns.', maxAttempts: 5 },
+    { id: 'e1', title: 'Variables & Data Types', badge: 'Fundamentals', description: "Practice declaring variables and using Python's core data types.", maxAttempts: 5, starterCode: '# Declare a variable named "age" and print it\n\n' },
+    { id: 'e2', title: 'Loops & Conditionals', badge: 'Control Flow', description: 'Implement common loop and conditional patterns.', maxAttempts: 5, starterCode: '# Write a for loop that prints numbers 1 to 10\n\n' },
   ],
   c2: [
-    { id: 'e3', title: 'Red-Black Tree Insertion', badge: 'Algorithm Design', description: 'Implement the self-balancing binary search tree insertion algorithm.', maxAttempts: 5 },
-    { id: 'e4', title: 'Binary Search', badge: 'Algorithm Design', description: 'Implement binary search on a sorted array.', maxAttempts: 5 },
+    { id: 'e3', title: 'Red-Black Tree Insertion', badge: 'Algorithm Design', description: 'Implement the self-balancing binary search tree insertion algorithm.', maxAttempts: 5, starterCode: 'class RedBlackTree:\n    def __init__(self):\n        self.NIL = Node(0, color="BLACK")\n        self.root = self.NIL\n\n    def insert(self, key):\n        # Your implementation here\n        pass\n' },
+    { id: 'e4', title: 'Binary Search', badge: 'Algorithm Design', description: 'Implement binary search on a sorted array.', maxAttempts: 5, starterCode: 'def binary_search(arr, target):\n    # Your implementation here\n    pass\n' },
   ],
   c3: [
-    { id: 'e5', title: 'Build a Nav Bar', badge: 'HTML/CSS', description: 'Create a responsive navigation bar.', maxAttempts: 5 },
+    { id: 'e5', title: 'Build a Nav Bar', badge: 'HTML/CSS', description: 'Create a responsive navigation bar.', maxAttempts: 5, starterCode: '<!-- Your HTML here -->\n' },
   ],
 };
 
@@ -93,20 +93,20 @@ const getInitials = () => {
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
 
-  const handleSelectExercise = (exercise) => {
-    // Submission.jsx will read this via useLocation().state
-    navigate('/submission', {
-      state: {
-        courseId,
-        courseTitle,
-        exerciseId: exercise.id,
-        exerciseTitle: exercise.title,
-        exerciseDescription: exercise.description,
-        exerciseBadge: exercise.badge,
-        maxAttempts: exercise.maxAttempts,
-      },
-    });
-  };
+ const handleSelectExercise = (exercise) => {
+  navigate('/submission', {
+    state: {
+      courseId,
+      courseTitle,
+      exerciseId: exercise.id,
+      exerciseTitle: exercise.title,
+      exerciseDescription: exercise.description,
+      exerciseBadge: exercise.badge,
+      maxAttempts: exercise.maxAttempts,
+      starterCode: exercise.starterCode,
+    },
+  });
+};
 
   return (
     <div style={styles.page}>
