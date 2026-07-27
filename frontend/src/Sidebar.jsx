@@ -1,5 +1,5 @@
-import { NAVY, NAVY_DARK } from './theme';
-import { CapIcon, LogOutIcon } from './icons';
+import { NAVY, NAVY_DARK } from './Theme';
+import { CapIcon, LogOutIcon } from './Icons';
 
 const hoverCSS = `
   .sidebarOverlay { transition: opacity 0.2s ease; }

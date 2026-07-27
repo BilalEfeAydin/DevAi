@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NAVY, NAVY_DARK } from './theme';
-import { BookIcon, ArrowIcon, CapIcon } from './icons';
+import { NAVY, NAVY_DARK } from './Theme';
+import { BookIcon, ArrowIcon, CapIcon } from './Icons';
 
 // NOTE (flagged deliberately): these courses are hardcoded placeholders.
 // There is no Courses table / API yet (student -> course enrollment is

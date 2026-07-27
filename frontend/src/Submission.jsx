@@ -4,12 +4,12 @@ import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
-import { NAVY } from './theme';
+import { NAVY } from './Theme';
 import Sidebar from './Sidebar';
 import {
   BookIcon, CapIcon, BellIcon, HelpIcon,
   MenuIcon, SettingsIcon, PlusIcon,
-} from './icons';
+} from './Icons';
 
 // TODO: only Python has real syntax highlighting for now (only @codemirror/lang-python
 // is installed). Files with other extensions render as plain text -- no coloring --
