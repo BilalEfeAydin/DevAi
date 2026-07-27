@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signUp, confirmSignUp } from 'aws-amplify/auth';
-import { styles } from './theme';
-import { MailIcon, LockIcon, EyeIcon, UserIcon, BookIcon, ArrowIcon, CapIcon, CalendarIcon } from './icons';
+import { styles } from './Theme';
+import { MailIcon, LockIcon, EyeIcon, UserIcon, BookIcon, ArrowIcon, CapIcon, CalendarIcon } from './Icons';
 
 // Import du DatePicker moderne
 import DatePicker from 'react-datepicker';
