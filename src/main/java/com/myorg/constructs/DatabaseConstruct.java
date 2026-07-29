@@ -22,6 +22,7 @@ public class DatabaseConstruct extends Construct {
 
     private final Table usersTable;
     private final Table coursesTable;
+    private final Table assignmentsTable;
     private final Table submissionsTable;
 
     public DatabaseConstruct(final Construct scope, final String id) {
@@ -78,7 +79,36 @@ public class DatabaseConstruct extends Construct {
                 .build());
 
         // =============================================
-        // 3. SUBMISSIONS TABLE
+        // 3. ASSIGNMENTS TABLE
+        // =============================================
+        // PK: AssignmentID (String)
+        // Attributes: CourseID, Title, Description, DueDate, CreatedAt, UpdatedAt
+        // GSI: CourseIndex (PK: CourseID, SK: CreatedAt)
+        this.assignmentsTable = Table.Builder.create(this, "AssignmentsTable")
+                .tableName("DevAi-Assignments")
+                .partitionKey(Attribute.builder()
+                        .name("AssignmentID")
+                        .type(AttributeType.STRING)
+                        .build())
+                .billingMode(BillingMode.PAY_PER_REQUEST)
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .build();
+
+        this.assignmentsTable.addGlobalSecondaryIndex(GlobalSecondaryIndexProps.builder()
+                .indexName("CourseIndex")
+                .partitionKey(Attribute.builder()
+                        .name("CourseID")
+                        .type(AttributeType.STRING)
+                        .build())
+                .sortKey(Attribute.builder()
+                        .name("CreatedAt")
+                        .type(AttributeType.STRING)
+                        .build())
+                .projectionType(ProjectionType.ALL)
+                .build());
+
+        // =============================================
+        // 4. SUBMISSIONS TABLE
         // =============================================
         // PK: SubmissionID (String)
         // Attributes: CourseID, StudentID, Status, Feedback, CreatedAt, UpdatedAt
@@ -133,6 +163,10 @@ public class DatabaseConstruct extends Construct {
 
     public Table getCoursesTable() {
         return this.coursesTable;
+    }
+
+    public Table getAssignmentsTable() {
+        return this.assignmentsTable;
     }
 
     public Table getSubmissionsTable() {

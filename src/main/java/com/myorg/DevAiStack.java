@@ -5,6 +5,7 @@ import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 
+import com.myorg.constructs.ApiConstruct;
 import com.myorg.constructs.DatabaseConstruct;
 import com.myorg.constructs.HostingConstruct;
 import com.myorg.constructs.StorageConstruct;
@@ -33,6 +34,11 @@ public class DevAiStack extends Stack {
         final HostingConstruct hosting = new HostingConstruct(this, "Hosting");
 
         // =============================================
+        // API (Lambda + API Gateway)
+        // =============================================
+        final ApiConstruct api = new ApiConstruct(this, "Api", database.getSubmissionsTable());
+
+        // =============================================
         // CLOUDFORMATION OUTPUTS
         // =============================================
         CfnOutput.Builder.create(this, "UsersTableName")
@@ -53,6 +59,16 @@ public class DevAiStack extends Stack {
         CfnOutput.Builder.create(this, "CoursesTableArn")
                 .value(database.getCoursesTable().getTableArn())
                 .description("DynamoDB Courses table ARN")
+                .build();
+
+        CfnOutput.Builder.create(this, "AssignmentsTableName")
+                .value(database.getAssignmentsTable().getTableName())
+                .description("DynamoDB Assignments table name")
+                .build();
+
+        CfnOutput.Builder.create(this, "AssignmentsTableArn")
+                .value(database.getAssignmentsTable().getTableArn())
+                .description("DynamoDB Assignments table ARN")
                 .build();
 
         CfnOutput.Builder.create(this, "SubmissionsTableName")
@@ -95,6 +111,12 @@ public class DevAiStack extends Stack {
         CfnOutput.Builder.create(this, "AmplifyAppUrl")
                 .value("https://main." + hosting.getDefaultDomain())
                 .description("Amplify production URL")
+                .build();
+
+        // API Outputs
+        CfnOutput.Builder.create(this, "ApiUrl")
+                .value(api.getApiUrl())
+                .description("HTTP API Gateway URL")
                 .build();
     }
 }

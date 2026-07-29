@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signIn, signOut, fetchUserAttributes } from 'aws-amplify/auth';
-import { styles } from './theme';
-import { MailIcon, LockIcon, EyeIcon, ArrowIcon, CapIcon } from './icons';
+import { styles } from './Theme';
+import { MailIcon, LockIcon, EyeIcon, ArrowIcon, CapIcon } from './Icons';
 
 function Login() {
   const navigate = useNavigate();

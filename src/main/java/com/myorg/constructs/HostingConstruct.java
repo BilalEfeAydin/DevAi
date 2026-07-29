@@ -1,11 +1,16 @@
 package com.myorg.constructs;
 
+import java.util.List;
 import java.util.Map;
 
 import software.constructs.Construct;
 import software.amazon.awscdk.SecretValue;
 import software.amazon.awscdk.services.amplify.CfnApp;
 import software.amazon.awscdk.services.amplify.CfnBranch;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.CompositePrincipal;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
 
 /**
  * CDK Construct that provisions AWS Amplify Hosting for DevAi:
@@ -50,12 +55,27 @@ public class HostingConstruct extends Construct {
         );
 
         // =============================================
+        // =============================================
+        // IAM SERVICE ROLE FOR AMPLIFY
+        // =============================================
+        Role amplifyRole = Role.Builder.create(this, "AmplifyServiceRole")
+                .assumedBy(new CompositePrincipal(
+                        new ServicePrincipal("amplify.amazonaws.com"),
+                        new ServicePrincipal("amplify.us-east-1.amazonaws.com")
+                ))
+                .managedPolicies(List.of(
+                        ManagedPolicy.fromAwsManagedPolicyName("AdministratorAccess-Amplify")
+                ))
+                .build();
+
+        // =============================================
         // AMPLIFY APP
         // =============================================
         this.amplifyApp = CfnApp.Builder.create(this, "AmplifyApp")
                 .name("DevAi")
                 .repository("https://github.com/BilalEfeAydin/DevAi")
                 .oauthToken(SecretValue.secretsManager("GitHubTokenAmplify").unsafeUnwrap())
+                .iamServiceRole(amplifyRole.getRoleArn())
                 .buildSpec(buildSpec)
                 .environmentVariables(java.util.List.of(
                         CfnApp.EnvironmentVariableProperty.builder()
