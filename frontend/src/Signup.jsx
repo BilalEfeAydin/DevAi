@@ -24,7 +24,7 @@ function Signup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [birthdate, setBirthdate] = useState(null); // ← maintenant un objet Date
+  const [birthdate, setBirthdate] = useState(null); 
   const [gender, setGender] = useState('');
   const [role, setRole] = useState('student');
   const [code, setCode] = useState('');
@@ -47,7 +47,7 @@ function Signup() {
       return;
     }
 
-    // Conversion de la date en format YYYY-MM-DD pour Cognito
+    
     const birthdateStr = birthdate ? format(birthdate, 'yyyy-MM-dd') : '';
 
     setLoading(true);
