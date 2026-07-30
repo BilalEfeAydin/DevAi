@@ -4,12 +4,12 @@ import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
-import { NAVY } from './theme';
+import { NAVY } from './Theme';
 import Sidebar from './Sidebar';
 import {
   BookIcon, CapIcon, BellIcon, HelpIcon,
   MenuIcon, SettingsIcon, PlusIcon,
-} from './icons';
+} from './Icons';
 
 // TODO: only Python has real syntax highlighting for now (only @codemirror/lang-python
 // is installed). Files with other extensions render as plain text -- no coloring --
@@ -39,11 +39,15 @@ function Submission() {
   const [lastName, setLastName] = useState('');
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [attemptsUsed, setAttemptsUsed] = useState(0);
+  const [output, setOutput] = useState(null); // { status: 'running'|'placeholder', message: string }
 
   const [files, setFiles] = useState([
     { id: 'main', name: 'main.py', content: starterCode },
   ]);
   const [activeFileId, setActiveFileId] = useState('main');
+  const [isAddingFile, setIsAddingFile] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
+  const [fileNameError, setFileNameError] = useState('');
 
   const activeFile = files.find((f) => f.id === activeFileId) || files[0];
 
@@ -92,15 +96,23 @@ function Submission() {
   ];
 
   const handleRunTests = () => {
-    // TODO: connect to real Lambda test-runner once backend is ready
-    alert('Run Tests — backend logic not connected yet.');
+    // TODO: connect to real Lambda test-runner once backend is ready.
+    // For now this just shows a placeholder in the output panel so the
+    // UI flow is testable before the backend call exists.
+    setOutput({
+      status: 'placeholder',
+      message: 'Test runner not connected yet — this panel will show real test results once the backend Lambda is wired in.',
+    });
   };
 
   const handleRunSubmit = () => {
     if (attemptsUsed >= maxAttempts) return; // safety net, button shouldn't be visible at this point
     setAttemptsUsed((prev) => prev + 1);
     // TODO: send `files` (array of { name, content }) to the Socratic AI review Lambda
-    alert('Run & Submit — attempt recorded. AI review not connected yet.');
+    setOutput({
+      status: 'placeholder',
+      message: 'Attempt recorded. AI review not connected yet — this panel will show the Socratic reviewer output once the backend Lambda is wired in.',
+    });
   };
 
   const handleCodeChange = (value) => {
@@ -110,17 +122,38 @@ function Submission() {
   };
 
   const handleAddFile = () => {
-    const name = window.prompt('New file name (e.g. index.html, styles.css):', 'untitled.py');
-    if (!name) return;
-    const trimmed = name.trim();
-    if (!trimmed) return;
+    setFileNameError('');
+    setNewFileName('');
+    setIsAddingFile(true);
+  };
+
+  const confirmAddFile = () => {
+    const trimmed = newFileName.trim();
+    if (!trimmed) {
+      setIsAddingFile(false);
+      return;
+    }
     if (files.some((f) => f.name === trimmed)) {
-      alert('A file with that name already exists.');
+      setFileNameError('A file with that name already exists.');
       return;
     }
     const newFile = { id: `${trimmed}-${Date.now()}`, name: trimmed, content: '' };
     setFiles((prev) => [...prev, newFile]);
     setActiveFileId(newFile.id);
+    setIsAddingFile(false);
+    setNewFileName('');
+    setFileNameError('');
+  };
+
+  const cancelAddFile = () => {
+    setIsAddingFile(false);
+    setNewFileName('');
+    setFileNameError('');
+  };
+
+  const handleFileNameKeyDown = (e) => {
+    if (e.key === 'Enter') confirmAddFile();
+    if (e.key === 'Escape') cancelAddFile();
   };
 
   const handleCloseFile = (fileId, event) => {
@@ -185,9 +218,25 @@ function Submission() {
                     <span>{file.name}</span>
                   </div>
                 ))}
-                <button type="button" onClick={handleAddFile} style={styles.addFileButton} aria-label="Add file">
-                  <PlusIcon />
-                </button>
+                {isAddingFile ? (
+                  <div style={styles.newFileInputWrap}>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={newFileName}
+                      onChange={(e) => { setNewFileName(e.target.value); setFileNameError(''); }}
+                      onKeyDown={handleFileNameKeyDown}
+                      onBlur={confirmAddFile}
+                      placeholder="file name..."
+                      style={styles.newFileInput}
+                    />
+                    {fileNameError && <span style={styles.newFileError}>{fileNameError}</span>}
+                  </div>
+                ) : (
+                  <button type="button" onClick={handleAddFile} style={styles.addFileButton} aria-label="Add file">
+                    <PlusIcon />
+                  </button>
+                )}
               </div>
               <span style={styles.languageLabel}>
                 {(activeFile.name.split('.').pop() || 'txt').toUpperCase()}
@@ -202,6 +251,21 @@ function Submission() {
               onChange={handleCodeChange}
               style={styles.codeMirrorWrap}
             />
+
+            <div style={styles.outputPanel}>
+              <div style={styles.outputPanelHeader}>Output</div>
+              <div style={styles.outputPanelBody}>
+                {output ? (
+                  <span style={output.status === 'placeholder' ? styles.outputTextMuted : styles.outputText}>
+                    {output.message}
+                  </span>
+                ) : (
+                  <span style={styles.outputTextMuted}>
+                    Run your code to see the output here.
+                  </span>
+                )}
+              </div>
+            </div>
 
             <div style={styles.actionRow}>
               <button type="button" onClick={handleRunTests} style={styles.runTestsButton}>
@@ -285,7 +349,24 @@ const styles = {
     width: 26, height: 26, borderRadius: '6px', border: '1px solid #2e303a', backgroundColor: 'transparent',
     color: '#aab0c8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
+  newFileInputWrap: { display: 'flex', flexDirection: 'column', gap: '0.2rem' },
+  newFileInput: {
+    width: 130, padding: '0.28rem 0.5rem', borderRadius: '6px', border: `1px solid ${NAVY}`,
+    backgroundColor: '#0f1017', color: '#fff', fontSize: '0.78rem', outline: 'none',
+  },
+  newFileError: { fontSize: '0.7rem', color: '#e07a7a' },
   codeMirrorWrap: { borderRadius: '8px', overflow: 'hidden', textAlign: 'left', fontSize: '0.85rem' },
+  outputPanel: {
+    backgroundColor: '#0f1017', borderRadius: '8px', border: '1px solid #2e303a',
+    minHeight: '110px', display: 'flex', flexDirection: 'column',
+  },
+  outputPanelHeader: {
+    padding: '0.5rem 0.8rem', fontSize: '0.72rem', fontWeight: 700, color: '#aab0c8',
+    borderBottom: '1px solid #2e303a', textTransform: 'uppercase', letterSpacing: '0.04em',
+  },
+  outputPanelBody: { padding: '0.7rem 0.8rem', textAlign: 'left', flex: 1 },
+  outputText: { fontSize: '0.82rem', color: '#e2e4ee', lineHeight: 1.5, fontFamily: 'ui-monospace, Consolas, monospace' },
+  outputTextMuted: { fontSize: '0.8rem', color: '#6b7086', lineHeight: 1.5, fontFamily: 'ui-monospace, Consolas, monospace' },
   actionRow: { display: 'flex', gap: '0.7rem', justifyContent: 'flex-end', alignItems: 'center' },
   runTestsButton: {
     padding: '0.6rem 1.2rem', backgroundColor: '#14b8a6', color: '#08221f', border: 'none',

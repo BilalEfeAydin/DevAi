@@ -16,8 +16,7 @@ export const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    // Suppression du padding : plus de marges sur les côtés
-    padding: '3rem 0', // ← seulement en haut et en bas, plus à gauche/droite
+    padding: '3rem 0',
   },
   header: { textAlign: 'center', marginBottom: '1.5rem' },
   logoRow: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' },
@@ -30,15 +29,19 @@ export const styles = {
     boxShadow: '0 8px 24px rgba(30,42,120,0.10)',
     padding: '1.75rem',
     width: '420px',
-    // On peut ajouter un margin auto pour centrer si nécessaire, mais c'est déjà centré par le wrapper
   },
   row2: { display: 'flex', gap: '0.8rem' },
   label: { display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#333', marginTop: '1rem', marginBottom: '0.3rem' },
   inputWrap: { position: 'relative', display: 'flex', alignItems: 'center' },
   inputIcon: { position: 'absolute', left: '0.75rem', color: '#888', display: 'flex' },
+
+  // FIX: height explicite (44px) partagée avec `select` ci-dessous.
+  // Padding vertical retiré (remplacé par la hauteur fixe) pour éviter
+  // les écarts de rendu entre <input> et <select> selon le navigateur/OS.
   input: {
     width: '100%',
-    padding: '0.6rem 0.75rem 0.6rem 2.4rem',
+    height: '44px',
+    padding: '0 0.75rem 0 2.4rem',
     borderRadius: '8px',
     border: '1px solid #d7dce8',
     fontSize: '0.9rem',
@@ -48,17 +51,30 @@ export const styles = {
     color: '#1a1a1a',
     colorScheme: 'light',
   },
+
+  // FIX: même height que `input` (44px), `appearance: none` pour désactiver
+  // le style natif du navigateur (c'est lui qui causait la différence de
+  // taille), + flèche custom dessinée en SVG pour remplacer celle du navigateur.
   select: {
     width: '100%',
-    padding: '0.6rem 0.75rem',
+    height: '44px',
+    padding: '0 2rem 0 0.75rem',
     borderRadius: '8px',
     border: '1px solid #d7dce8',
     fontSize: '0.9rem',
     boxSizing: 'border-box',
     backgroundColor: '#fff',
-    color: '#1a1a1a',
     colorScheme: 'light',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    backgroundImage:
+      "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%23888'/></svg>\")",
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 0.75rem center',
+    cursor: 'pointer',
   },
+
   eyeButton: {
     position: 'absolute',
     right: '0.7rem',
@@ -124,6 +140,9 @@ export const styles = {
   },
   error: { color: '#c00', fontSize: '0.85rem', marginTop: '0.6rem' },
   success: { color: '#0a7c2f', fontSize: '0.85rem', marginTop: '0.6rem' },
+
+  // Gardé pour compat, mais plus utilisé tel quel dans Signup.jsx
+  // (remplacé par un rendu conditionnel avec couleur dynamique).
   passwordHint: {
     fontSize: '0.75rem',
     color: '#666',
