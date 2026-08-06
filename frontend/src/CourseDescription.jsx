@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
-import { NAVY, NAVY_DARK } from './theme';
+import { NAVY, NAVY_DARK } from './Theme';
 import Sidebar from './Sidebar';
 import {
    BookIcon, CapIcon, BellIcon,
   HelpIcon, MenuIcon, SettingsIcon, ArrowIcon
-} from './icons';
+} from './Icons';
 
 // NOTE (flagged deliberately): mocked exercises, same placeholder pattern as
 // CoursePicker.jsx's `courses` array. Replace with a real fetch

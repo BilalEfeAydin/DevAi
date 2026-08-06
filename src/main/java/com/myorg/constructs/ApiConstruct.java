@@ -6,6 +6,7 @@ import java.util.Map;
 import software.constructs.Construct;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.CfnOutput;
+import software.amazon.awscdk.SecretValue;
 import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.lambda.Code;
@@ -51,14 +52,18 @@ public class ApiConstruct extends Construct {
                 .environment(Map.of("TABLE_NAME", submissionsTable.getTableName()))
                 .build();
 
-        // POST /submissions — writes to DynamoDB
+        // POST /submissions — writes to DynamoDB + runs code in E2B sandbox
         this.postSubmissionFn = Function.Builder.create(this, "PostSubmissionFn")
                 .functionName("DevAi-PostSubmission")
                 .runtime(Runtime.NODEJS_24_X)
                 .handler("index.handler")
                 .code(Code.fromAsset("src/main/java/controllers/postSubmission"))
-                .timeout(Duration.seconds(10))
-                .environment(Map.of("TABLE_NAME", submissionsTable.getTableName()))
+                .timeout(Duration.seconds(25))
+                .memorySize(512)
+                .environment(Map.of(
+                        "TABLE_NAME", submissionsTable.getTableName(),
+                        "E2B_API_KEY", SecretValue.secretsManager("E2BApiKey").unsafeUnwrap()
+                ))
                 .build();
 
         // GET /orchestrator — stub that reads Cognito JWT claims

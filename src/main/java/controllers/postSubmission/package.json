@@ -1,0 +1,9 @@
+{
+  "name": "devai-post-submission",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "DevAi postSubmission Lambda — saves student code and runs it in E2B sandbox",
+  "dependencies": {
+    "@e2b/code-interpreter": "^1.0.0"
+  }
+}
