@@ -3,6 +3,7 @@ import Signup from './Signup';
 import Login from './Login';
 import StudentProfile from './Studentprofile';
 import InstructorProfile from './Instructorprofile';
+import InstructorCourseDashboard from './InstructorCourseDashboard'; 
 import CoursePicker from './CoursePicker';
 import Submission from './Submission';
 import CourseDescription from './CourseDescription';
@@ -15,14 +16,12 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/profile/student" element={<StudentProfile />} />
         <Route path="/profile/instructor" element={<InstructorProfile />} />
+        <Route path="/instructor/course-dashboard" element={<InstructorCourseDashboard />} /> {/* NEW */}
         <Route path="/courses" element={<CoursePicker />} />
         <Route path="/submission" element={<Submission />} />
         <Route path="/course-description" element={<CourseDescription />} />
 
-        {/* Default route: anyone landing on "/" goes to the signup page for now */}
         <Route path="/" element={<Navigate to="/signup" replace />} />
-
-        {/* Catch-all: unknown URLs fall back to signup */}
         <Route path="*" element={<Navigate to="/signup" replace />} />
       </Routes>
     </BrowserRouter>

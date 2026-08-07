@@ -41,6 +41,21 @@ function Submission() {
   const [attemptsUsed, setAttemptsUsed] = useState(0);
   const [output, setOutput] = useState(null); // { status: 'running'|'placeholder', message: string }
 
+  // MOCK: shape matches what the Bedrock Socratic-review Lambda is expected
+  // to return once Sprint 3's "Wire Bedrock into Lambda pipeline" is done.
+  // Replace generateMockFeedback() with the real API response when ready.
+  // NOTE: this is the feedback for the LIVE/current attempt only. Past
+  // attempts keep their own frozen feedback inside attemptHistory (see below).
+  const [aiFeedback, setAiFeedback] = useState(null);
+
+  // NEW: attempt history — each entry is a FROZEN snapshot of files + feedback
+  // taken at the moment "Run & Submit" was clicked. This is what lets the
+  // student scroll back through past attempts. Replace with a real fetch from
+  // the Submissions table (StudentIndex GSI, sorted by CreatedAt) once that
+  // backend piece exists — the shape below should stay compatible.
+  const [attemptHistory, setAttemptHistory] = useState([]);
+  const [viewingAttemptNumber, setViewingAttemptNumber] = useState(null); // null = viewing the live/current attempt
+
   const [files, setFiles] = useState([
     { id: 'main', name: 'main.py', content: starterCode },
   ]);
@@ -49,7 +64,20 @@ function Submission() {
   const [newFileName, setNewFileName] = useState('');
   const [fileNameError, setFileNameError] = useState('');
 
-  const activeFile = files.find((f) => f.id === activeFileId) || files[0];
+  // Which attempt are we looking at? null = the live, editable attempt.
+  const viewingSnapshot = viewingAttemptNumber !== null
+    ? attemptHistory.find((a) => a.attemptNumber === viewingAttemptNumber)
+    : null;
+  const isViewingPast = viewingSnapshot !== null;
+
+  // Files/feedback actually shown depend on whether we're viewing history or the live attempt.
+  // EVERYTHING in the JSX below must read from these two (displayedFiles /
+  // displayedFeedback), never directly from `files` or `aiFeedback` --
+  // otherwise the tabs/history UI silently shows live data while looking
+  // like it's showing a past attempt.
+  const displayedFiles = isViewingPast ? viewingSnapshot.files : files;
+  const displayedFeedback = isViewingPast ? viewingSnapshot.feedback : aiFeedback;
+  const activeFile = displayedFiles.find((f) => f.id === activeFileId) || displayedFiles[0];
 
   useEffect(() => {
     async function loadProfile() {
@@ -105,10 +133,32 @@ function Submission() {
     });
   };
 
+  const generateMockFeedback = () => ({
+    status: 'needs_work', // 'needs_work' | 'on_track'
+    questions: [
+      { id: 'q1', text: 'What happens to your loop variable when the list is empty?', line: 4 },
+      { id: 'q2', text: 'Could two different inputs produce the same output here? Why or why not?', line: 7 },
+    ],
+  });
+
   const handleRunSubmit = () => {
     if (attemptsUsed >= maxAttempts) return; // safety net, button shouldn't be visible at this point
-    setAttemptsUsed((prev) => prev + 1);
-    // TODO: send `files` (array of { name, content }) to the Socratic AI review Lambda
+    const newAttemptNumber = attemptsUsed + 1;
+    const feedback = generateMockFeedback();
+
+    setAttemptHistory((prev) => [
+      ...prev,
+      {
+        attemptNumber: newAttemptNumber,
+        files: files.map((f) => ({ ...f })), // shallow copy so later edits to `files` don't mutate history
+        feedback,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
+
+    setAttemptsUsed(newAttemptNumber);
+    setAiFeedback(feedback);
+    setViewingAttemptNumber(null); // stay on the live attempt right after submitting
     setOutput({
       status: 'placeholder',
       message: 'Attempt recorded. AI review not connected yet — this panel will show the Socratic reviewer output once the backend Lambda is wired in.',
@@ -116,12 +166,14 @@ function Submission() {
   };
 
   const handleCodeChange = (value) => {
+    if (isViewingPast) return; // safety net -- editor is readOnly, but block writes at the state level too
     setFiles((prev) =>
       prev.map((f) => (f.id === activeFileId ? { ...f, content: value } : f))
     );
   };
 
   const handleAddFile = () => {
+    if (isViewingPast) return;
     setFileNameError('');
     setNewFileName('');
     setIsAddingFile(true);
@@ -158,6 +210,7 @@ function Submission() {
 
   const handleCloseFile = (fileId, event) => {
     event.stopPropagation(); // don't switch tabs when clicking the X
+    if (isViewingPast) return;
     if (files.length === 1) {
       alert('You need at least one file open.');
       return;
@@ -199,9 +252,37 @@ function Submission() {
 
         <div style={styles.workArea}>
           <div style={styles.editorColumn}>
+            {attemptHistory.length > 0 && (
+              <div style={styles.attemptTabsRow}>
+                {attemptHistory.map((attempt) => (
+                  <div
+                    key={attempt.attemptNumber}
+                    onClick={() => setViewingAttemptNumber(attempt.attemptNumber)}
+                    style={
+                      viewingAttemptNumber === attempt.attemptNumber
+                        ? styles.attemptTabActive
+                        : styles.attemptTab
+                    }
+                  >
+                    Attempt {attempt.attemptNumber}
+                  </div>
+                ))}
+                <div
+                  onClick={() => setViewingAttemptNumber(null)}
+                  style={
+                    viewingAttemptNumber === null
+                      ? styles.attemptTabActive
+                      : styles.attemptTab
+                  }
+                >
+                  Current
+                </div>
+              </div>
+            )}
+
             <div style={styles.editorTopBar}>
               <div style={styles.fileTabs}>
-                {files.map((file) => (
+                {displayedFiles.map((file) => (
                   <div
                     key={file.id}
                     onClick={() => setActiveFileId(file.id)}
@@ -249,6 +330,7 @@ function Submission() {
               theme={vscodeDark}
               extensions={getLanguageExtension(activeFile.name)}
               onChange={handleCodeChange}
+              readOnly={isViewingPast}
               style={styles.codeMirrorWrap}
             />
 
@@ -268,17 +350,25 @@ function Submission() {
             </div>
 
             <div style={styles.actionRow}>
-              <button type="button" onClick={handleRunTests} style={styles.runTestsButton}>
-                Run Tests
-              </button>
-              {attemptsUsed < maxAttempts ? (
-                <button type="button" onClick={handleRunSubmit} style={styles.runSubmitButton}>
-                  Run & Submit
+              {isViewingPast ? (
+                <button type="button" onClick={() => setViewingAttemptNumber(null)} style={styles.runSubmitButton}>
+                  Back to Current Attempt
                 </button>
               ) : (
-                <span style={styles.attemptsExhaustedText}>
-                  No attempts remaining
-                </span>
+                <>
+                  <button type="button" onClick={handleRunTests} style={styles.runTestsButton}>
+                    Run Tests
+                  </button>
+                  {attemptsUsed < maxAttempts ? (
+                    <button type="button" onClick={handleRunSubmit} style={styles.runSubmitButton}>
+                      Run & Submit
+                    </button>
+                  ) : (
+                    <span style={styles.attemptsExhaustedText}>
+                      No attempts remaining
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -294,9 +384,20 @@ function Submission() {
 
             <div style={styles.inquiryCard}>
               <h3 style={styles.inquiryCardTitle}>Socratic Inquiry</h3>
-              <p style={styles.inquiryCardText}>
-                Your AI reviewer's guiding questions will appear here once you submit your first attempt.
-              </p>
+              {!displayedFeedback ? (
+                <p style={styles.inquiryCardText}>
+                  Your AI reviewer's guiding questions will appear here once you submit your first attempt.
+                </p>
+              ) : (
+                <ol style={styles.feedbackList}>
+                  {displayedFeedback.questions.map((q) => (
+                    <li key={q.id} style={styles.feedbackItem}>
+                      <span style={styles.feedbackLineTag}>Line {q.line}</span>
+                      <span>{q.text}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
             </div>
           </div>
         </div>
@@ -330,6 +431,15 @@ const styles = {
   },
   editorTopBar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' },
   fileTabs: { display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' },
+  attemptTabsRow: { display: 'flex', gap: '0.4rem', marginBottom: '0.2rem', flexWrap: 'wrap' },
+  attemptTab: {
+    padding: '0.28rem 0.7rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600,
+    color: '#aab0c8', backgroundColor: 'transparent', border: '1px solid #2e303a', cursor: 'pointer',
+  },
+  attemptTabActive: {
+    padding: '0.28rem 0.7rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700,
+    color: '#fff', backgroundColor: NAVY, border: `1px solid ${NAVY}`, cursor: 'pointer',
+  },
   fileTab: {
     display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.3rem 0.6rem',
     borderRadius: '6px', backgroundColor: 'transparent', color: '#aab0c8',
@@ -398,6 +508,13 @@ const styles = {
   },
   inquiryCardTitle: { color: NAVY, fontSize: '0.9rem', margin: '0 0 0.5rem' },
   inquiryCardText: { color: '#666', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 },
+  feedbackList: { margin: 0, paddingLeft: '1.1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' },
+  feedbackItem: { fontSize: '0.85rem', color: '#444', lineHeight: 1.5 },
+  feedbackLineTag: {
+    display: 'inline-block', fontSize: '0.65rem', fontWeight: 700, color: NAVY,
+    backgroundColor: 'rgba(30,42,120,0.08)', padding: '0.1rem 0.4rem', borderRadius: '4px',
+    marginRight: '0.4rem',
+  },
 };
 
 export default Submission;
