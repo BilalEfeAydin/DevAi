@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signUp, confirmSignUp } from 'aws-amplify/auth';
+import { signUp, confirmSignUp, signIn, signOut, fetchUserAttributes, resendSignUpCode } from 'aws-amplify/auth';
 import { styles } from './Theme';
 import { MailIcon, LockIcon, EyeIcon, UserIcon, BookIcon, ArrowIcon, CapIcon, CalendarIcon } from './Icons';
 
@@ -24,7 +24,7 @@ function Signup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [birthdate, setBirthdate] = useState(null); // ← maintenant un objet Date
+  const [birthdate, setBirthdate] = useState(null); 
   const [gender, setGender] = useState('');
   const [role, setRole] = useState('student');
   const [code, setCode] = useState('');
@@ -32,6 +32,16 @@ function Signup() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // NEW: pour l'affichage conditionnel de la règle du mot de passe
+  const [passwordHovered, setPasswordHovered] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
+  const isPasswordValid = passwordRegex.test(password);
+  // Affiché soit au survol, soit dès que l'utilisateur a quitté le champ
+  // avec un mot de passe invalide (rouge dans ce cas).
+  const showPasswordHint = passwordHovered || (passwordTouched && password.length > 0 && !isPasswordValid);
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -42,12 +52,18 @@ function Signup() {
       return;
     }
 
+    if (!isPasswordValid) {
+      setPasswordTouched(true);
+      setError('Password does not meet the requirements above.');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
 
-    // Conversion de la date en format YYYY-MM-DD pour Cognito
+    
     const birthdateStr = birthdate ? format(birthdate, 'yyyy-MM-dd') : '';
 
     setLoading(true);
@@ -70,7 +86,30 @@ function Signup() {
       setSuccessMessage('Account created. Check your inbox for the verification code.');
       setStep('confirm');
     } catch (err) {
-      setError(err.message || 'An error occurred during sign up.');
+      // NEW: if the account already exists but was never confirmed (e.g. the
+      // user refreshed the page mid-flow, losing React state, then tried to
+      // sign up again with the same email), Cognito rejects the new signUp
+      // with UsernameExistsException. Instead of showing a dead-end error,
+      // send a fresh code and drop them straight into the confirm step --
+      // confirmSignUp() only needs username + code, so this works even
+      // though we didn't just create the account in this render.
+      if (err.name === 'UsernameExistsException') {
+        try {
+          await resendSignUpCode({ username: email });
+          setSuccessMessage('This account already exists but was never verified. A new code has been sent to your inbox.');
+          setStep('confirm');
+        } catch (resendErr) {
+          if (resendErr.name === 'InvalidParameterException') {
+            // Cognito throws this when the account is ALREADY confirmed --
+            // meaning this really is a duplicate signup, not a stuck one.
+            setError('An account with this email already exists. Please log in instead.');
+          } else {
+            setError(resendErr.message || 'Could not resend the verification code. Please try logging in.');
+          }
+        }
+      } else {
+        setError(err.message || 'An error occurred during sign up.');
+      }
     } finally {
       setLoading(false);
     }
@@ -83,9 +122,51 @@ function Signup() {
 
     try {
       await confirmSignUp({ username: email, confirmationCode: code });
-      setSuccessMessage('Account verified successfully! You can now log in.');
     } catch (err) {
       setError(err.message || 'Invalid or expired code.');
+      setLoading(false);
+      return;
+    }
+
+    // Confirmation succeeded -- from here on, any failure is a signIn
+    // problem, NOT a bad code. Handled separately so the error message
+    // stays accurate.
+    try {
+      try {
+        await signOut();
+      } catch (signOutErr) {
+        // ignore -- nobody was signed in, that's fine
+      }
+
+      const { isSignedIn } = await signIn({ username: email, password });
+
+      if (!isSignedIn) {
+        setSuccessMessage('Account verified! Please log in.');
+        setTimeout(() => navigate('/login'), 1200);
+        return;
+      }
+
+      let resolvedRole = role;
+      try {
+        const attributes = await fetchUserAttributes();
+        resolvedRole = attributes['custom:role'] || role;
+      } catch (attrErr) {
+        console.warn('Could not fetch user attributes:', attrErr);
+      }
+
+      setSuccessMessage('Account verified successfully! Redirecting to your profile...');
+      setTimeout(() => {
+        navigate(resolvedRole === 'instructor' ? '/profile/instructor' : '/profile/student');
+      }, 800);
+    } catch (signInErr) {
+      // NEW: this covers the case where `password` in state doesn't match
+      // what's actually on the account -- e.g. the user refreshed mid-flow,
+      // lost state, came back through the UsernameExistsException recovery
+      // path, and typed a different password the second time. The account
+      // IS verified at this point (confirmed === true), just not signed in.
+      console.warn('Account confirmed but auto sign-in failed:', signInErr);
+      setSuccessMessage('Account verified! Please log in.');
+      setTimeout(() => navigate('/login'), 1200);
     } finally {
       setLoading(false);
     }
@@ -110,7 +191,7 @@ function Signup() {
               <form onSubmit={handleSignup}>
                 <div style={styles.row2}>
                   <div style={{ flex: 1 }}>
-                    <label style={styles.label}>Full Name</label>
+                    <label style={styles.label}>First Name</label>
                     <div style={styles.inputWrap}>
                       <span style={styles.inputIcon}><UserIcon /></span>
                       <input
@@ -153,15 +234,25 @@ function Signup() {
                 </div>
 
                 <label style={styles.label}>Password</label>
-                <div style={styles.inputWrap}>
+                <div
+                  style={styles.inputWrap}
+                  onMouseEnter={() => setPasswordHovered(true)}
+                  onMouseLeave={() => setPasswordHovered(false)}
+                >
                   <span style={styles.inputIcon}><LockIcon /></span>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onBlur={() => setPasswordTouched(true)}
                     required
                     placeholder="Create a secure password"
-                    style={styles.input}
+                    style={{
+                      ...styles.input,
+                      border: passwordTouched && password.length > 0 && !isPasswordValid
+                        ? '1px solid #c00'
+                        : styles.input.border,
+                    }}
                   />
                   <button
                     type="button"
@@ -172,9 +263,16 @@ function Signup() {
                     <EyeIcon />
                   </button>
                 </div>
-                <p style={styles.passwordHint}>
-                  Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character.
-                </p>
+                {showPasswordHint && (
+                  <p
+                    style={{
+                      ...styles.passwordHint,
+                      color: passwordTouched && password.length > 0 && !isPasswordValid ? '#c00' : '#666',
+                    }}
+                  >
+                    Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character.
+                  </p>
+                )}
 
                 <label style={styles.label}>Confirm Password</label>
                 <div style={styles.inputWrap}>
@@ -213,12 +311,14 @@ function Signup() {
                       value={gender}
                       onChange={(e) => setGender(e.target.value)}
                       required
-                      style={styles.select}
+                      style={{
+                        ...styles.select,
+                        color: gender ? '#1a1a1a' : '#98a0b8',
+                      }}
                     >
-                      <option value="">Select gender</option>
+                      <option value="" disabled hidden>Select gender</option>
                       <option value="male">Male</option>
                       <option value="female">Female</option>
-                      {/* L'option "prefer not to say" est bien supprimée */}
                     </select>
                   </div>
                 </div>
