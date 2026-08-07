@@ -41,6 +41,7 @@ function Submission() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [attemptsUsed, setAttemptsUsed] = useState(0);
   const [output, setOutput] = useState(null); // { status: 'running'|'placeholder', message: string }
+  const [aiReview, setAiReview] = useState(null); // stores Bedrock review object
 
   const [files, setFiles] = useState([
     { id: 'main', name: 'main.py', content: starterCode },
@@ -102,6 +103,7 @@ function Submission() {
     const code = mainFile.content;
 
     setOutput({ status: 'running', message: 'Running your code...' });
+    setAiReview(null);
 
     try {
       const session = await fetchAuthSession();
@@ -135,6 +137,11 @@ function Submission() {
         stderr: exec.stderr || [],
         error: exec.error || null,
       });
+
+      // Capture AI review if present
+      if (data.aiReview) {
+        setAiReview(data.aiReview);
+      }
     } catch (err) {
       console.error('Run Tests error:', err);
       setOutput({ status: 'error', message: err.message || 'Network error.' });
@@ -362,9 +369,41 @@ function Submission() {
 
             <div style={styles.inquiryCard}>
               <h3 style={styles.inquiryCardTitle}>Socratic Inquiry</h3>
-              <p style={styles.inquiryCardText}>
-                Your AI reviewer's guiding questions will appear here once you submit your first attempt.
-              </p>
+              {!aiReview ? (
+                <p style={styles.inquiryCardText}>
+                  Your AI reviewer's guiding questions will appear here once you submit your first attempt.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#333' }}>
+                    <strong>{aiReview.status === 'PASS' ? '✅ Pass' : '🔍 Review Needed'}:</strong> {aiReview.summary}
+                  </div>
+                  {aiReview.feedback && aiReview.feedback.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.4rem' }}>
+                      {aiReview.feedback.map((fb, idx) => (
+                        <div key={idx} style={{
+                          backgroundColor: fb.type === 'violation' ? '#fff1f2' : (fb.type === 'concern' ? '#fffbeb' : '#f0f9ff'),
+                          borderLeft: `3px solid ${fb.type === 'violation' ? '#f43f5e' : (fb.type === 'concern' ? '#fbbf24' : '#38bdf8')}`,
+                          padding: '0.6rem 0.8rem',
+                          borderRadius: '4px'
+                        }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#555', marginBottom: '0.2rem' }}>
+                            Line {fb.line}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#1a1a1a', lineHeight: 1.4 }}>
+                            {fb.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {aiReview.generalSuggestion && (
+                    <div style={{ fontSize: '0.85rem', color: '#555', fontStyle: 'italic', marginTop: '0.4rem' }}>
+                      💡 {aiReview.generalSuggestion}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
