@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
+import { signOut, fetchUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
+import { API_BASE_URL } from './amplifyConfig';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
@@ -95,24 +96,57 @@ function Submission() {
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
 
-  const handleRunTests = () => {
-    // TODO: connect to real Lambda test-runner once backend is ready.
-    // For now this just shows a placeholder in the output panel so the
-    // UI flow is testable before the backend call exists.
-    setOutput({
-      status: 'placeholder',
-      message: 'Test runner not connected yet — this panel will show real test results once the backend Lambda is wired in.',
-    });
+  const handleRunTests = async () => {
+    // Collect all file contents into a single string (main file first)
+    const mainFile = files.find((f) => f.id === 'main') || files[0];
+    const code = mainFile.content;
+
+    setOutput({ status: 'running', message: 'Running your code...' });
+
+    try {
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken?.toString();
+
+      const res = await fetch(`${API_BASE_URL}/submissions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          courseId: courseId || 'test-course',
+          studentId: session.tokens?.idToken?.payload?.sub || 'unknown',
+          content: code,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setOutput({ status: 'error', message: data.message || 'Something went wrong.' });
+        return;
+      }
+
+      // Build output from E2B execution results
+      const exec = data.execution || {};
+      setOutput({
+        status: exec.executionStatus || 'passed',
+        stdout: exec.stdout || [],
+        stderr: exec.stderr || [],
+        error: exec.error || null,
+      });
+    } catch (err) {
+      console.error('Run Tests error:', err);
+      setOutput({ status: 'error', message: err.message || 'Network error.' });
+    }
   };
 
-  const handleRunSubmit = () => {
-    if (attemptsUsed >= maxAttempts) return; // safety net, button shouldn't be visible at this point
+  const handleRunSubmit = async () => {
+    if (attemptsUsed >= maxAttempts) return;
     setAttemptsUsed((prev) => prev + 1);
-    // TODO: send `files` (array of { name, content }) to the Socratic AI review Lambda
-    setOutput({
-      status: 'placeholder',
-      message: 'Attempt recorded. AI review not connected yet — this panel will show the Socratic reviewer output once the backend Lambda is wired in.',
-    });
+    // For now, Run & Submit does the same as Run Tests.
+    // Once Bedrock is integrated, this will also return AI review feedback.
+    await handleRunTests();
   };
 
   const handleCodeChange = (value) => {
@@ -255,14 +289,48 @@ function Submission() {
             <div style={styles.outputPanel}>
               <div style={styles.outputPanelHeader}>Output</div>
               <div style={styles.outputPanelBody}>
-                {output ? (
-                  <span style={output.status === 'placeholder' ? styles.outputTextMuted : styles.outputText}>
-                    {output.message}
-                  </span>
-                ) : (
+                {!output && (
                   <span style={styles.outputTextMuted}>
                     Run your code to see the output here.
                   </span>
+                )}
+                {output && output.status === 'running' && (
+                  <span style={styles.outputTextMuted}>⏳ {output.message}</span>
+                )}
+                {output && output.status === 'error' && (
+                  <span style={{ ...styles.outputText, color: '#e07a7a' }}>❌ {output.message}</span>
+                )}
+                {output && (output.status === 'passed' || output.status === 'failed') && (
+                  <div>
+                    {output.stdout && output.stdout.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: '#6b7086', marginBottom: '0.3rem', fontWeight: 600 }}>stdout</div>
+                        <pre style={{ ...styles.outputText, color: '#4ade80', margin: 0, whiteSpace: 'pre-wrap' }}>
+                          {output.stdout.join('')}
+                        </pre>
+                      </div>
+                    )}
+                    {output.stderr && output.stderr.length > 0 && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <div style={{ fontSize: '0.72rem', color: '#6b7086', marginBottom: '0.3rem', fontWeight: 600 }}>stderr</div>
+                        <pre style={{ ...styles.outputText, color: '#facc15', margin: 0, whiteSpace: 'pre-wrap' }}>
+                          {output.stderr.join('')}
+                        </pre>
+                      </div>
+                    )}
+                    {output.error && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <div style={{ fontSize: '0.72rem', color: '#6b7086', marginBottom: '0.3rem', fontWeight: 600 }}>error</div>
+                        <pre style={{ ...styles.outputText, color: '#e07a7a', margin: 0, whiteSpace: 'pre-wrap' }}>
+{output.error.name}: {output.error.value}
+{output.error.traceback}
+                        </pre>
+                      </div>
+                    )}
+                    {(!output.stdout || output.stdout.length === 0) && !output.error && (
+                      <span style={styles.outputTextMuted}>Code ran successfully with no output.</span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

@@ -8,3 +8,6 @@ Amplify.configure({
     }
   }
 });
+
+// API Gateway endpoint deployed by CDK (DevAiStack.ApiUrl)
+export const API_BASE_URL = 'https://lfass4s0ll.execute-api.us-east-1.amazonaws.com';
