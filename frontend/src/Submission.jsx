@@ -48,7 +48,7 @@ function Submission() {
   // attempts keep their own frozen feedback inside attemptHistory (see below).
   const [aiFeedback, setAiFeedback] = useState(null);
 
-  // NEW: attempt history — each entry is a FROZEN snapshot of files + feedback
+  // attempt history , each entry is a FROZEN snapshot of files + feedback
   // taken at the moment "Run & Submit" was clicked. This is what lets the
   // student scroll back through past attempts. Replace with a real fetch from
   // the Submissions table (StudentIndex GSI, sorted by CreatedAt) once that
