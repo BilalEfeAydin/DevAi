@@ -52,17 +52,18 @@ public class ApiConstruct extends Construct {
                 .environment(Map.of("TABLE_NAME", submissionsTable.getTableName()))
                 .build();
 
-        // POST /submissions — writes to DynamoDB + runs code in E2B sandbox
+        // POST /submissions — writes to DynamoDB + runs code in E2B sandbox + AI review via Bedrock
         this.postSubmissionFn = Function.Builder.create(this, "PostSubmissionFn")
                 .functionName("DevAi-PostSubmission")
                 .runtime(Runtime.NODEJS_24_X)
                 .handler("index.handler")
                 .code(Code.fromAsset("src/main/java/controllers/postSubmission"))
-                .timeout(Duration.seconds(25))
+                .timeout(Duration.seconds(29))
                 .memorySize(512)
                 .environment(Map.of(
                         "TABLE_NAME", submissionsTable.getTableName(),
-                        "E2B_API_KEY", SecretValue.secretsManager("E2BApiKey").unsafeUnwrap()
+                        "E2B_API_KEY", SecretValue.secretsManager("E2BApiKey").unsafeUnwrap(),
+                        "BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
                 ))
                 .build();
 
@@ -81,6 +82,13 @@ public class ApiConstruct extends Construct {
         // Grant the controller Lambdas read/write access to the Submissions table + indexes
         submissionsTable.grantReadData(this.getSubmissionFn);
         submissionsTable.grantReadWriteData(this.postSubmissionFn);
+
+        // Grant postSubmission permission to invoke Bedrock models (for AI code review)
+        this.postSubmissionFn.addToRolePolicy(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .actions(List.of("bedrock:InvokeModel"))
+                .resources(List.of("arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-haiku-4-5-20251001-v1:0"))
+                .build());
 
         // =============================================
         // 3. HTTP API GATEWAY (using L1 CfnApi)
