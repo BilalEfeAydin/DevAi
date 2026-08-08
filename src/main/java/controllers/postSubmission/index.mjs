@@ -171,15 +171,16 @@ ${numberedCode}
 
       const outputText = response.output.message.content[0].text;
 
-      // Parse JSON (handle possible markdown code fences)
+      // Robust JSON extraction: find the first '{' and last '}'
       let jsonStr = outputText;
-      if (jsonStr.includes("```json")) {
-        jsonStr = jsonStr.split("```json")[1].split("```")[0];
-      } else if (jsonStr.includes("```")) {
-        jsonStr = jsonStr.split("```")[1].split("```")[0];
+      const firstBrace = jsonStr.indexOf("{");
+      const lastBrace = jsonStr.lastIndexOf("}");
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
       }
 
-      const parsed = JSON.parse(jsonStr.trim());
+      const parsed = JSON.parse(jsonStr);
       return parsed;
     } catch (parseErr) {
       console.warn(`Bedrock response parse attempt ${retry + 1} failed:`, parseErr.message);
