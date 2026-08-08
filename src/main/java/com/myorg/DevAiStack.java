@@ -6,6 +6,7 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 
 import com.myorg.constructs.ApiConstruct;
+import com.myorg.constructs.AuthConstruct;
 import com.myorg.constructs.DatabaseConstruct;
 import com.myorg.constructs.HostingConstruct;
 import com.myorg.constructs.StorageConstruct;
@@ -37,6 +38,11 @@ public class DevAiStack extends Stack {
         // API (Lambda + API Gateway)
         // =============================================
         final ApiConstruct api = new ApiConstruct(this, "Api", database.getSubmissionsTable());
+
+        // =============================================
+        // AUTH (Cognito Post-Confirmation trigger)
+        // =============================================
+        final AuthConstruct auth = new AuthConstruct(this, "Auth", database.getUsersTable());
 
         // =============================================
         // CLOUDFORMATION OUTPUTS
