@@ -43,6 +43,21 @@ function Submission() {
   const [output, setOutput] = useState(null); // { status: 'running'|'placeholder', message: string }
   const [aiReview, setAiReview] = useState(null); // stores Bedrock review object
 
+  // MOCK: shape matches what the Bedrock Socratic-review Lambda is expected
+  // to return once Sprint 3's "Wire Bedrock into Lambda pipeline" is done.
+  // Replace generateMockFeedback() with the real API response when ready.
+  // NOTE: this is the feedback for the LIVE/current attempt only. Past
+  // attempts keep their own frozen feedback inside attemptHistory (see below).
+  const [aiFeedback, setAiFeedback] = useState(null);
+
+  // attempt history , each entry is a FROZEN snapshot of files + feedback
+  // taken at the moment "Run & Submit" was clicked. This is what lets the
+  // student scroll back through past attempts. Replace with a real fetch from
+  // the Submissions table (StudentIndex GSI, sorted by CreatedAt) once that
+  // backend piece exists — the shape below should stay compatible.
+  const [attemptHistory, setAttemptHistory] = useState([]);
+  const [viewingAttemptNumber, setViewingAttemptNumber] = useState(null); // null = viewing the live/current attempt
+
   const [files, setFiles] = useState([
     { id: 'main', name: 'main.py', content: starterCode },
   ]);
@@ -51,7 +66,20 @@ function Submission() {
   const [newFileName, setNewFileName] = useState('');
   const [fileNameError, setFileNameError] = useState('');
 
-  const activeFile = files.find((f) => f.id === activeFileId) || files[0];
+  // Which attempt are we looking at? null = the live, editable attempt.
+  const viewingSnapshot = viewingAttemptNumber !== null
+    ? attemptHistory.find((a) => a.attemptNumber === viewingAttemptNumber)
+    : null;
+  const isViewingPast = viewingSnapshot !== null;
+
+  // Files/feedback actually shown depend on whether we're viewing history or the live attempt.
+  // EVERYTHING in the JSX below must read from these two (displayedFiles /
+  // displayedFeedback), never directly from `files` or `aiFeedback` --
+  // otherwise the tabs/history UI silently shows live data while looking
+  // like it's showing a past attempt.
+  const displayedFiles = isViewingPast ? viewingSnapshot.files : files;
+  const displayedFeedback = isViewingPast ? viewingSnapshot.feedback : aiFeedback;
+  const activeFile = displayedFiles.find((f) => f.id === activeFileId) || displayedFiles[0];
 
   useEffect(() => {
     async function loadProfile() {
@@ -157,12 +185,14 @@ function Submission() {
   };
 
   const handleCodeChange = (value) => {
+    if (isViewingPast) return; // safety net -- editor is readOnly, but block writes at the state level too
     setFiles((prev) =>
       prev.map((f) => (f.id === activeFileId ? { ...f, content: value } : f))
     );
   };
 
   const handleAddFile = () => {
+    if (isViewingPast) return;
     setFileNameError('');
     setNewFileName('');
     setIsAddingFile(true);
@@ -199,6 +229,7 @@ function Submission() {
 
   const handleCloseFile = (fileId, event) => {
     event.stopPropagation(); // don't switch tabs when clicking the X
+    if (isViewingPast) return;
     if (files.length === 1) {
       alert('You need at least one file open.');
       return;
@@ -240,9 +271,37 @@ function Submission() {
 
         <div style={styles.workArea}>
           <div style={styles.editorColumn}>
+            {attemptHistory.length > 0 && (
+              <div style={styles.attemptTabsRow}>
+                {attemptHistory.map((attempt) => (
+                  <div
+                    key={attempt.attemptNumber}
+                    onClick={() => setViewingAttemptNumber(attempt.attemptNumber)}
+                    style={
+                      viewingAttemptNumber === attempt.attemptNumber
+                        ? styles.attemptTabActive
+                        : styles.attemptTab
+                    }
+                  >
+                    Attempt {attempt.attemptNumber}
+                  </div>
+                ))}
+                <div
+                  onClick={() => setViewingAttemptNumber(null)}
+                  style={
+                    viewingAttemptNumber === null
+                      ? styles.attemptTabActive
+                      : styles.attemptTab
+                  }
+                >
+                  Current
+                </div>
+              </div>
+            )}
+
             <div style={styles.editorTopBar}>
               <div style={styles.fileTabs}>
-                {files.map((file) => (
+                {displayedFiles.map((file) => (
                   <div
                     key={file.id}
                     onClick={() => setActiveFileId(file.id)}
@@ -290,6 +349,7 @@ function Submission() {
               theme={vscodeDark}
               extensions={getLanguageExtension(activeFile.name)}
               onChange={handleCodeChange}
+              readOnly={isViewingPast}
               style={styles.codeMirrorWrap}
             />
 
@@ -343,17 +403,25 @@ function Submission() {
             </div>
 
             <div style={styles.actionRow}>
-              <button type="button" onClick={handleRunTests} style={styles.runTestsButton}>
-                Run Tests
-              </button>
-              {attemptsUsed < maxAttempts ? (
-                <button type="button" onClick={handleRunSubmit} style={styles.runSubmitButton}>
-                  Run & Submit
+              {isViewingPast ? (
+                <button type="button" onClick={() => setViewingAttemptNumber(null)} style={styles.runSubmitButton}>
+                  Back to Current Attempt
                 </button>
               ) : (
-                <span style={styles.attemptsExhaustedText}>
-                  No attempts remaining
-                </span>
+                <>
+                  <button type="button" onClick={handleRunTests} style={styles.runTestsButton}>
+                    Run Tests
+                  </button>
+                  {attemptsUsed < maxAttempts ? (
+                    <button type="button" onClick={handleRunSubmit} style={styles.runSubmitButton}>
+                      Run & Submit
+                    </button>
+                  ) : (
+                    <span style={styles.attemptsExhaustedText}>
+                      No attempts remaining
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -437,6 +505,15 @@ const styles = {
   },
   editorTopBar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' },
   fileTabs: { display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' },
+  attemptTabsRow: { display: 'flex', gap: '0.4rem', marginBottom: '0.2rem', flexWrap: 'wrap' },
+  attemptTab: {
+    padding: '0.28rem 0.7rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600,
+    color: '#aab0c8', backgroundColor: 'transparent', border: '1px solid #2e303a', cursor: 'pointer',
+  },
+  attemptTabActive: {
+    padding: '0.28rem 0.7rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700,
+    color: '#fff', backgroundColor: NAVY, border: `1px solid ${NAVY}`, cursor: 'pointer',
+  },
   fileTab: {
     display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.3rem 0.6rem',
     borderRadius: '6px', backgroundColor: 'transparent', color: '#aab0c8',
@@ -505,6 +582,13 @@ const styles = {
   },
   inquiryCardTitle: { color: NAVY, fontSize: '0.9rem', margin: '0 0 0.5rem' },
   inquiryCardText: { color: '#666', fontSize: '0.85rem', lineHeight: 1.5, margin: 0 },
+  feedbackList: { margin: 0, paddingLeft: '1.1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' },
+  feedbackItem: { fontSize: '0.85rem', color: '#444', lineHeight: 1.5 },
+  feedbackLineTag: {
+    display: 'inline-block', fontSize: '0.65rem', fontWeight: 700, color: NAVY,
+    backgroundColor: 'rgba(30,42,120,0.08)', padding: '0.1rem 0.4rem', borderRadius: '4px',
+    marginRight: '0.4rem',
+  },
 };
 
 export default Submission;

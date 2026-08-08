@@ -33,7 +33,7 @@ function Signup() {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  // NEW: pour l'affichage conditionnel de la règle du mot de passe
+  //  pour l'affichage conditionnel de la règle du mot de passe
   const [passwordHovered, setPasswordHovered] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
 
@@ -159,7 +159,7 @@ function Signup() {
         navigate(resolvedRole === 'instructor' ? '/profile/instructor' : '/profile/student');
       }, 800);
     } catch (signInErr) {
-      // NEW: this covers the case where `password` in state doesn't match
+      // this covers the case where `password` in state doesn't match
       // what's actually on the account -- e.g. the user refreshed mid-flow,
       // lost state, came back through the UsernameExistsException recovery
       // path, and typed a different password the second time. The account
