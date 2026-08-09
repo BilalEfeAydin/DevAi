@@ -84,10 +84,15 @@ public class ApiConstruct extends Construct {
         submissionsTable.grantReadWriteData(this.postSubmissionFn);
 
         // Grant postSubmission permission to invoke Bedrock models (for AI code review)
+        // NOTE: Cross-region inference profiles use a different ARN format that
+        // includes the account ID. We grant both to cover all routing paths.
         this.postSubmissionFn.addToRolePolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
                 .actions(List.of("bedrock:InvokeModel"))
-                .resources(List.of("arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-haiku-4-5-20251001-v1:0"))
+                .resources(List.of(
+                        "arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+                        "arn:aws:bedrock:us-east-1:677414637011:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+                ))
                 .build());
 
         // =============================================
