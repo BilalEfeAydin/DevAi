@@ -446,8 +446,53 @@ function Submission() {
                   <div style={{ fontSize: '0.85rem', color: '#333' }}>
                     <strong>{aiReview.status === 'PASS' ? '✅ Pass' : '🔍 Review Needed'}:</strong> {aiReview.summary}
                   </div>
+                  {aiReview.resolvedIssues && aiReview.resolvedIssues.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.4rem' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#16a34a' }}>✅ Resolved Issues</div>
+                      {aiReview.resolvedIssues.map((fb, idx) => (
+                        <div key={idx} style={{
+                          backgroundColor: '#f0fdf4',
+                          borderLeft: `3px solid #22c55e`,
+                          padding: '0.6rem 0.8rem',
+                          borderRadius: '4px'
+                        }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#16a34a', marginBottom: '0.2rem' }}>
+                            Line {fb.line}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#1a1a1a', lineHeight: 1.4 }}>
+                            {fb.resolution}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {aiReview.persistingIssues && aiReview.persistingIssues.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.4rem' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#ea580c' }}>⚠️ Persisting Issues</div>
+                      {aiReview.persistingIssues.map((fb, idx) => (
+                        <div key={idx} style={{
+                          backgroundColor: '#fff7ed',
+                          borderLeft: `3px solid #f97316`,
+                          padding: '0.6rem 0.8rem',
+                          borderRadius: '4px'
+                        }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ea580c', marginBottom: '0.2rem' }}>
+                            Line {fb.line}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#1a1a1a', lineHeight: 1.4 }}>
+                            {fb.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {aiReview.feedback && aiReview.feedback.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.4rem' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0284c7' }}>
+                        {(aiReview.resolvedIssues?.length > 0 || aiReview.persistingIssues?.length > 0) ? '🆕 New Issues' : 'Issues'}
+                      </div>
                       {aiReview.feedback.map((fb, idx) => (
                         <div key={idx} style={{
                           backgroundColor: fb.type === 'violation' ? '#fff1f2' : (fb.type === 'concern' ? '#fffbeb' : '#f0f9ff'),

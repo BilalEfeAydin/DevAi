@@ -87,7 +87,7 @@ CRITICAL CONSTRAINTS FOR YOUR QUESTIONS:
 4. The student code has explicit line numbers prepended. You MUST use these line numbers in your JSON response.
 5. Order feedback items by severity: VIOLATION issues first, then concerns, then suggestions.
 6. If the code is correct and follows the honor code, return status PASS with an empty feedback array.
-7. EVERY Socratic question/message in your feedback array MUST be extremely concise (AT MOST 2 SENTENCES MAXIMUM). Do not ramble.
+7. EVERY Socratic question/message in your feedback array MUST be extremely concise (AT MOST 1 SENTENCES MAXIMUM). Do not ramble.
 
 Respond with a JSON object in this format:
 {
@@ -97,6 +97,12 @@ Respond with a JSON object in this format:
   "confidence": "HIGH" | "MEDIUM" | "LOW",
   "attemptNumber": ${attemptNumber},
   "hintLevel": "${hintLevel}",
+  "resolvedIssues": [
+    { "line": <line_number>, "originalMessage": "The original Socratic question", "resolution": "Brief explanation of how the student fixed it" }
+  ],
+  "persistingIssues": [
+    { "line": <line_number>, "originalMessage": "The original Socratic question", "message": "Your updated Socratic question focusing on why the issue still persists" }
+  ],
   "feedback": [
     {
       "line": <line_number>,
@@ -111,8 +117,8 @@ Do NOT include any markdown syntax.
 The very first character of your response MUST be '{' and the very last character MUST be '}'.`;
 }
 
-// ── Count previous submissions for this student + course ──────────
-async function countPreviousAttempts(studentId, courseId) {
+// ── Fetch previous submission for this student + course ─────────────
+async function fetchPreviousSubmission(studentId, courseId) {
   try {
     const result = await ddb.send(new QueryCommand({
       TableName: TABLE_NAME,
@@ -123,26 +129,45 @@ async function countPreviousAttempts(studentId, courseId) {
         ":sid": studentId,
         ":cid": courseId,
       },
-      Select: "COUNT",
+      ScanIndexForward: false, // Newest first
     }));
-    return result.Count || 0;
+    
+    const items = result.Items || [];
+    const count = items.length;
+    // Look for the most recent submission that has an aiReview
+    const latestWithReview = items.find(item => item.aiReview) || null;
+
+    return {
+      count,
+      previousReview: latestWithReview ? latestWithReview.aiReview : null,
+    };
   } catch (err) {
-    console.warn("Could not count previous attempts (index may not exist yet):", err.message);
-    return 0;
+    console.warn("Could not fetch previous submissions (index may not exist yet):", err.message);
+    return { count: 0, previousReview: null };
   }
 }
 
 // ── Call Bedrock AI for code review ───────────────────────────────
-async function reviewWithBedrock(code, attemptNumber) {
+async function reviewWithBedrock(code, attemptNumber, previousReview) {
   // Add line numbers to the code
   const numberedCode = code
     .split("\n")
     .map((line, i) => `${i + 1}: ${line}`)
     .join("\n");
 
-  const systemPrompt = buildSystemPrompt(attemptNumber);
+  let systemPrompt = buildSystemPrompt(attemptNumber);
 
-  const userMessage = `Please review the following student code submission against the honor code.
+  if (previousReview) {
+    systemPrompt += `\n\nCOMPARISON INSTRUCTIONS:
+- You have been provided with the student's PREVIOUS AI review in the user message.
+- Compare their current code against the issues flagged in that previous review.
+- For each previous issue, determine if the student RESOLVED it or if it PERSISTS.
+- Populate the "resolvedIssues" array with items they successfully fixed. Start your summary by praising them for fixing these.
+- Populate the "persistingIssues" array with items that STILL exist. Guide them further on these issues based on the current hint level.
+- Any completely NEW issues found in the current code should go into the standard "feedback" array.`;
+  }
+
+  let userMessage = `Please review the following student code submission against the honor code.
 
 <honor_code>
 ${HONOR_CODE}
@@ -151,6 +176,12 @@ ${HONOR_CODE}
 <student_code>
 ${numberedCode}
 </student_code>`;
+
+  if (previousReview) {
+    userMessage += `\n\n<previous_review attempt="${previousReview.attemptNumber || attemptNumber - 1}">
+${JSON.stringify(previousReview, null, 2)}
+</previous_review>`;
+  }
 
   // Retry up to 2 times for JSON parsing failures
   for (let retry = 0; retry < 2; retry++) {
@@ -176,7 +207,7 @@ ${numberedCode}
       let jsonStr = outputText;
       const firstBrace = jsonStr.indexOf("{");
       const lastBrace = jsonStr.lastIndexOf("}");
-      
+
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
         jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
       }
@@ -275,12 +306,12 @@ export const handler = async (event) => {
     }
 
     // ── 3. AI Review via Bedrock ───────────────────────────────
-    const previousAttempts = await countPreviousAttempts(studentId, courseId);
-    const attemptNumber = previousAttempts + 1; // +1 because the current submission is already saved
+    const { count, previousReview } = await fetchPreviousSubmission(studentId, courseId);
+    const attemptNumber = count + 1; // +1 because the current submission is already saved
 
     let aiReview = null;
     try {
-      aiReview = await reviewWithBedrock(content, attemptNumber);
+      aiReview = await reviewWithBedrock(content, attemptNumber, previousReview);
     } catch (bedrockErr) {
       console.error("Bedrock AI review error:", bedrockErr);
       aiReview = {
