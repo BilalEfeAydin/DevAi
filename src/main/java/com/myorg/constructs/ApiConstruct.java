@@ -90,8 +90,8 @@ public class ApiConstruct extends Construct {
                 .effect(Effect.ALLOW)
                 .actions(List.of("bedrock:InvokeModel"))
                 .resources(List.of(
-                        "arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-haiku-4-5-20251001-v1:0",
-                        "arn:aws:bedrock:us-east-1:677414637011:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0"
+                        "arn:aws:bedrock:us-east-1::foundation-model/*",
+                        "arn:aws:bedrock:us-east-1:*:inference-profile/*"
                 ))
                 .build());
 
