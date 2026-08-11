@@ -389,8 +389,8 @@ function Submission() {
                       <div style={{ marginTop: '0.5rem' }}>
                         <div style={{ fontSize: '0.72rem', color: '#6b7086', marginBottom: '0.3rem', fontWeight: 600 }}>error</div>
                         <pre style={{ ...styles.outputText, color: '#e07a7a', margin: 0, whiteSpace: 'pre-wrap' }}>
-{output.error.name}: {output.error.value}
-{output.error.traceback}
+                          {output.error.name}: {output.error.value}
+                          {output.error.traceback}
                         </pre>
                       </div>
                     )}
@@ -439,7 +439,7 @@ function Submission() {
               <h3 style={styles.inquiryCardTitle}>Socratic Inquiry</h3>
               {!aiReview ? (
                 <p style={styles.inquiryCardText}>
-                  Your AI reviewer's guiding questions will appear here once you submit your first attempt.
+                  Your AI reviewer's guiding questions will appear here once you submit your attempt.
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
@@ -463,11 +463,6 @@ function Submission() {
                           </div>
                         </div>
                       ))}
-                    </div>
-                  )}
-                  {aiReview.generalSuggestion && (
-                    <div style={{ fontSize: '0.85rem', color: '#555', fontStyle: 'italic', marginTop: '0.4rem' }}>
-                      💡 {aiReview.generalSuggestion}
                     </div>
                   )}
                 </div>

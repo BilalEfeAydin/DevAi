@@ -87,6 +87,7 @@ CRITICAL CONSTRAINTS FOR YOUR QUESTIONS:
 4. The student code has explicit line numbers prepended. You MUST use these line numbers in your JSON response.
 5. Order feedback items by severity: VIOLATION issues first, then concerns, then suggestions.
 6. If the code is correct and follows the honor code, return status PASS with an empty feedback array.
+7. EVERY Socratic question/message in your feedback array MUST be extremely concise (AT MOST 2 SENTENCES MAXIMUM). Do not ramble.
 
 Respond with a JSON object in this format:
 {
