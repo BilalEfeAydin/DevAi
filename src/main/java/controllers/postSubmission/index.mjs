@@ -37,7 +37,7 @@ University Honor Code — CS Department:
 `;
 
 // ── Build graduated system prompt based on attempt number ──────────
-function buildSystemPrompt(attemptNumber) {
+function buildSystemPrompt(attemptNumber, hasPreviousReview) {
   let hintLevel, hintInstructions;
 
   if (attemptNumber <= 2) {
@@ -67,6 +67,14 @@ HINT LEVEL: DIRECT HINTS (Attempt 5+)
 - Be as helpful as possible: "On line X, you create an array of size N, but then try to access index N. What happens?"`;
   }
 
+  const versionComparisonSchema = hasPreviousReview ? `
+  "resolvedIssues": [
+    { "line": <line_number>, "originalMessage": "The original Socratic question", "resolution": "Brief explanation of how the student fixed it" }
+  ],
+  "persistingIssues": [
+    { "line": <line_number>, "originalMessage": "The original Socratic question", "message": "Your updated Socratic question focusing on why the issue still persists" }
+  ],` : "";
+
   return `You are an expert, minimalist Computer Science Professor acting as a Socratic tutor.
 Evaluate the provided student code against the Honor Code and for any logic or syntax errors.
 
@@ -84,10 +92,12 @@ CRITICAL CONSTRAINTS FOR YOUR QUESTIONS:
 1. Check if the code appears to violate any rules in the provided <honor_code>.
 2. Avoid directly quoting the student's code. You may reference general concepts but never copy-paste their exact code.
 3. NEVER suggest the correct syntax or alternative logic.
-4. The student code has explicit line numbers prepended. You MUST use these line numbers in your JSON response.
-5. Order feedback items by severity: VIOLATION issues first, then concerns, then suggestions.
-6. If the code is correct and follows the honor code, return status PASS with an empty feedback array.
-7. EVERY Socratic question/message in your feedback array MUST be extremely concise (AT MOST 1 SENTENCES MAXIMUM). Do not ramble.
+4. NEVER NAME the specific operator, keyword, or syntax the student used incorrectly. Do NOT contrast what they wrote with what they should have written (e.g., NEVER say "you used X instead of Y").
+5. Your questions should make the student THINK about the problem, not reveal it. A good question forces them to re-read their code and discover the issue themselves.
+6. The student code has explicit line numbers prepended. You MUST use these line numbers in your JSON response.
+7. Order feedback items by severity: VIOLATION issues first, then concerns, then suggestions.
+8. If the code is correct and follows the honor code, return status PASS with an empty feedback array.
+9. EVERY Socratic question/message in your feedback array MUST be extremely concise (AT MOST 1 SENTENCES MAXIMUM). Do not ramble.
 
 Respond with a JSON object in this format:
 {
@@ -96,13 +106,7 @@ Respond with a JSON object in this format:
   "generalSuggestion": "Brief suggestion about the whole code if there is",
   "confidence": "HIGH" | "MEDIUM" | "LOW",
   "attemptNumber": ${attemptNumber},
-  "hintLevel": "${hintLevel}",
-  "resolvedIssues": [
-    { "line": <line_number>, "originalMessage": "The original Socratic question", "resolution": "Brief explanation of how the student fixed it" }
-  ],
-  "persistingIssues": [
-    { "line": <line_number>, "originalMessage": "The original Socratic question", "message": "Your updated Socratic question focusing on why the issue still persists" }
-  ],
+  "hintLevel": "${hintLevel}",${versionComparisonSchema}
   "feedback": [
     {
       "line": <line_number>,
@@ -155,9 +159,10 @@ async function reviewWithBedrock(code, attemptNumber, previousReview) {
     .map((line, i) => `${i + 1}: ${line}`)
     .join("\n");
 
-  let systemPrompt = buildSystemPrompt(attemptNumber);
+  const hasPreviousReview = previousReview != null;
+  let systemPrompt = buildSystemPrompt(attemptNumber, hasPreviousReview);
 
-  if (previousReview) {
+  if (hasPreviousReview) {
     systemPrompt += `\n\nCOMPARISON INSTRUCTIONS:
 - You have been provided with the student's PREVIOUS AI review in the user message.
 - Compare their current code against the issues flagged in that previous review.
