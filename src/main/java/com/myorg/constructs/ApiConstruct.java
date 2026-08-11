@@ -84,14 +84,15 @@ public class ApiConstruct extends Construct {
         submissionsTable.grantReadWriteData(this.postSubmissionFn);
 
         // Grant postSubmission permission to invoke Bedrock models (for AI code review)
-        // NOTE: Cross-region inference profiles use a different ARN format that
-        // includes the account ID. We grant both to cover all routing paths.
+        // NOTE: The "us." model ID prefix enables cross-region inference, meaning
+        // Bedrock may route requests to ANY US region (us-east-1, us-east-2, us-west-2).
+        // We must use "*" for the region to cover all possible routing destinations.
         this.postSubmissionFn.addToRolePolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
                 .actions(List.of("bedrock:InvokeModel"))
                 .resources(List.of(
-                        "arn:aws:bedrock:us-east-1::foundation-model/*",
-                        "arn:aws:bedrock:us-east-1:*:inference-profile/*"
+                        "arn:aws:bedrock:*::foundation-model/*",
+                        "arn:aws:bedrock:*:*:inference-profile/*"
                 ))
                 .build());
 
