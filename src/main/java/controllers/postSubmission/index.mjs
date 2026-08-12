@@ -245,30 +245,33 @@ ${JSON.stringify(previousReview, null, 2)}
 export const handler = async (event) => {
   try {
     const body = typeof event.body === "string" ? JSON.parse(event.body) : (event.body || {});
-    const { courseId, studentId, content } = body;
+    const { courseId, studentId, content, submitForReview } = body;
 
     if (!courseId || !studentId || !content) {
       return respond(400, { message: "courseId, studentId and content are required" });
     }
 
-    // ── 1. Save submission to DynamoDB ──────────────────────────
+    // ── 1. Save submission to DynamoDB (only on formal submit) ──
     const now = new Date().toISOString();
     const submissionId = randomUUID();
-    const item = {
-      SubmissionID: submissionId,
-      CourseID: courseId,
-      StudentID: studentId,
-      content,
-      status: "submitted",
-      CreatedAt: now,
-      UpdatedAt: now,
-    };
 
-    await ddb.send(new PutCommand({
-      TableName: TABLE_NAME,
-      Item: item,
-      ConditionExpression: "attribute_not_exists(SubmissionID)",
-    }));
+    if (submitForReview) {
+      const item = {
+        SubmissionID: submissionId,
+        CourseID: courseId,
+        StudentID: studentId,
+        content,
+        status: "submitted",
+        CreatedAt: now,
+        UpdatedAt: now,
+      };
+
+      await ddb.send(new PutCommand({
+        TableName: TABLE_NAME,
+        Item: item,
+        ConditionExpression: "attribute_not_exists(SubmissionID)",
+      }));
+    }
 
     // ── 2. Execute code in E2B sandbox ─────────────────────────
     let executionResult = {
@@ -314,58 +317,66 @@ export const handler = async (event) => {
       }
     }
 
-    // ── 3. AI Review via Bedrock ───────────────────────────────
-    const { count, previousReview } = await fetchPreviousSubmission(studentId, courseId);
-    const attemptNumber = count + 1;
-
+    // ── 3. AI Review via Bedrock (only on formal submit) ───────
     let aiReview = null;
-    try {
-      aiReview = await reviewWithBedrock(content, attemptNumber, previousReview);
-    } catch (bedrockErr) {
-      console.error("Bedrock AI review error:", bedrockErr);
-      aiReview = {
-        status: "NEEDS_REVIEW",
-        summary: "AI review encountered an error.",
-        generalSuggestion: "The code was executed successfully. AI feedback will be available on retry.",
-        confidence: "LOW",
-        attemptNumber,
-        hintLevel: "UNKNOWN",
-        feedback: [],
-      };
+    let attemptNumber = null;
+
+    if (submitForReview) {
+      const { count, previousReview } = await fetchPreviousSubmission(studentId, courseId);
+      attemptNumber = count + 1;
+
+      try {
+        aiReview = await reviewWithBedrock(content, attemptNumber, previousReview);
+      } catch (bedrockErr) {
+        console.error("Bedrock AI review error:", bedrockErr);
+        aiReview = {
+          status: "NEEDS_REVIEW",
+          summary: "AI review encountered an error.",
+          generalSuggestion: "The code was executed successfully. AI feedback will be available on retry.",
+          confidence: "LOW",
+          attemptNumber,
+          hintLevel: "UNKNOWN",
+          feedback: [],
+        };
+      }
+
+      // ── 4. Update DynamoDB with execution + AI review results ──
+      const updatedAt = new Date().toISOString();
+      await ddb.send(new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { SubmissionID: submissionId },
+        UpdateExpression:
+          "SET #status = :status, executionStatus = :execStatus, stdout = :stdout, stderr = :stderr, executionError = :error, aiReview = :aiReview, attemptNumber = :attemptNum, UpdatedAt = :updatedAt",
+        ExpressionAttributeNames: {
+          "#status": "status",
+        },
+        ExpressionAttributeValues: {
+          ":status": "reviewed",
+          ":execStatus": executionResult.executionStatus,
+          ":stdout": executionResult.stdout,
+          ":stderr": executionResult.stderr,
+          ":error": executionResult.error,
+          ":aiReview": aiReview,
+          ":attemptNum": attemptNumber,
+          ":updatedAt": updatedAt,
+        },
+      }));
     }
 
-    // ── 4. Update DynamoDB with execution + AI review results ──
-    const updatedAt = new Date().toISOString();
-    await ddb.send(new UpdateCommand({
-      TableName: TABLE_NAME,
-      Key: { SubmissionID: submissionId },
-      UpdateExpression:
-        "SET #status = :status, executionStatus = :execStatus, stdout = :stdout, stderr = :stderr, executionError = :error, aiReview = :aiReview, attemptNumber = :attemptNum, UpdatedAt = :updatedAt",
-      ExpressionAttributeNames: {
-        "#status": "status",
-      },
-      ExpressionAttributeValues: {
-        ":status": "reviewed",
-        ":execStatus": executionResult.executionStatus,
-        ":stdout": executionResult.stdout,
-        ":stderr": executionResult.stderr,
-        ":error": executionResult.error,
-        ":aiReview": aiReview,
-        ":attemptNum": attemptNumber,
-        ":updatedAt": updatedAt,
-      },
-    }));
-
     // ── 5. Return full result to frontend ──────────────────────
-    return respond(201, {
-      submission: {
-        ...item,
-        status: "reviewed",
-        attemptNumber,
-        UpdatedAt: updatedAt,
-      },
+    return respond(submitForReview ? 201 : 200, {
+      ...(submitForReview ? {
+        submission: {
+          SubmissionID: submissionId,
+          CourseID: courseId,
+          StudentID: studentId,
+          content,
+          status: "reviewed",
+          attemptNumber,
+        },
+      } : {}),
       execution: executionResult,
-      aiReview,
+      ...(aiReview ? { aiReview } : {}),
     });
 
   } catch (err) {

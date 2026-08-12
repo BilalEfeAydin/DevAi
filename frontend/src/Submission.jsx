@@ -177,13 +177,13 @@ function Submission() {
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
 
-  const handleRunTests = async () => {
+  const handleRunTests = async (submitForReview = false) => {
     // Collect all file contents into a single string (main file first)
     const mainFile = files.find((f) => f.id === 'main') || files[0];
     const code = mainFile.content;
 
     setOutput({ status: 'running', message: 'Running your code...' });
-    setAiReview(null);
+    if (!submitForReview) setAiReview(null); // only clear review on plain Run Tests
 
     try {
       const session = await fetchAuthSession();
@@ -199,6 +199,7 @@ function Submission() {
           courseId: courseId || 'test-course',
           studentId: session.tokens?.idToken?.payload?.sub || 'unknown',
           content: code,
+          submitForReview,
         }),
       });
 
@@ -231,9 +232,7 @@ function Submission() {
   const handleRunSubmit = async () => {
     if (attemptsUsed >= maxAttempts) return;
     setAttemptsUsed((prev) => prev + 1);
-    // For now, Run & Submit does the same as Run Tests.
-    // Once Bedrock is integrated, this will also return AI review feedback.
-    await handleRunTests();
+    await handleRunTests(true);
   };
 
   const handleCodeChange = (value) => {
