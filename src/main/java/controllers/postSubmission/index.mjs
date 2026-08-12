@@ -94,12 +94,12 @@ CRITICAL CONSTRAINTS FOR YOUR QUESTIONS:
 3. NEVER suggest the correct syntax or alternative logic.
 4. NEVER NAME the specific operator, keyword, or syntax the student used incorrectly. Do NOT contrast what they wrote with what they should have written (e.g., NEVER say "you used X instead of Y").
 5. Your questions should make the student THINK about the problem, not reveal it. A good question forces them to re-read their code and discover the issue themselves.
-6. The \`summary\` field MUST ALSO obey these rules. The summary must be a generic, high-level assessment (e.g., "The code has a syntax error") and MUST NOT give away the specific error or solution.
+6. The "summary" field MUST ALSO obey these rules. The summary must be a generic, high-level assessment (e.g., "The code has a syntax error") and MUST NOT give away the specific error or solution.
 7. The student code has explicit line numbers prepended. You MUST use these line numbers in your JSON response.
 8. Order feedback items by severity: VIOLATION issues first, then concerns, then suggestions.
 9. If the code is correct and follows the honor code, return status PASS with an empty feedback array.
 10. EVERY Socratic question/message in your feedback array MUST be extremely concise (AT MOST 1 SENTENCES MAXIMUM). Do not ramble.
-11. MUTUAL EXCLUSIVITY: An issue is EITHER a persisting issue OR a new issue. NEVER put the same issue in both the \`persistingIssues\` and \`feedback\` arrays.
+11. MUTUAL EXCLUSIVITY: An issue is EITHER a persisting issue OR a new issue. NEVER put the same issue in both the "persistingIssues" and "feedback" arrays.
 
 Respond with a JSON object in this format:
 {
