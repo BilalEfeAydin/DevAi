@@ -460,7 +460,7 @@ function Submission() {
                 </button>
               ) : (
                 <>
-                  <button type="button" onClick={handleRunTests} style={styles.runTestsButton}>
+                  <button type="button" onClick={() => handleRunTests(false)} style={styles.runTestsButton}>
                     Run Tests
                   </button>
                   {attemptsUsed < maxAttempts ? (
