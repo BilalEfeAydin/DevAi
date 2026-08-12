@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signIn, signOut, fetchUserAttributes } from 'aws-amplify/auth';
+import { signIn, signOut, fetchUserAttributes, resetPassword, confirmResetPassword } from 'aws-amplify/auth';
 import { styles } from './Theme';
 import { MailIcon, LockIcon, EyeIcon, ArrowIcon, CapIcon } from './Icons';
 
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
+
 function Login() {
   const navigate = useNavigate();
+
+  const [step, setStep] = useState('login'); // 'login' | 'forgotRequest' | 'forgotConfirm'
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,6 +17,15 @@ function Login() {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // NEW: forgot-password flow state
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -64,6 +77,85 @@ function Login() {
     }
   };
 
+  // NEW: step 1 -- request a reset code via Cognito
+  const handleRequestReset = async (e) => {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+    setResetLoading(true);
+
+    try {
+      await resetPassword({ username: resetEmail });
+      setResetSuccess('A verification code was sent to your email.');
+      setStep('forgotConfirm');
+    } catch (err) {
+      if (err.name === 'UserNotFoundException') {
+        // NOTE: Cognito can be configured to hide whether an account exists,
+        // to avoid leaking which emails are registered. If that setting is
+        // ever turned on, this branch won't fire the same way -- treat this
+        // message as best-effort, not a guarantee.
+        setResetError('No account found with this email.');
+      } else if (err.name === 'LimitExceededException') {
+        setResetError('Too many attempts. Please wait a moment and try again.');
+      } else {
+        setResetError(err.message || 'Could not send the verification code.');
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  // NEW: step 2 -- confirm the code + set the new password
+  const handleConfirmReset = async (e) => {
+    e.preventDefault();
+    setResetError('');
+
+    if (!passwordRegex.test(newPassword)) {
+      setResetError('Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setResetError('Passwords do not match.');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await confirmResetPassword({
+        username: resetEmail,
+        confirmationCode: resetCode,
+        newPassword,
+      });
+      setResetSuccess('Password reset successfully! Please log in.');
+      setTimeout(() => {
+        setStep('login');
+        setEmail(resetEmail);
+        setPassword('');
+        setResetEmail('');
+        setResetCode('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setResetSuccess('');
+      }, 1200);
+    } catch (err) {
+      if (err.name === 'CodeMismatchException') {
+        setResetError('Invalid verification code.');
+      } else if (err.name === 'ExpiredCodeException') {
+        setResetError('This code has expired. Please request a new one.');
+      } else {
+        setResetError(err.message || 'Could not reset the password.');
+      }
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const backToLogin = () => {
+    setStep('login');
+    setResetError('');
+    setResetSuccess('');
+  };
+
   return (
     <div style={styles.page}>
       <div style={styles.wrapper}>
@@ -78,59 +170,177 @@ function Login() {
         </div>
 
         <div style={styles.card}>
-          <form onSubmit={handleLogin}>
-            <label style={styles.label}>Email Address</label>
-            <div style={styles.inputWrap}>
-              <span style={styles.inputIcon}><MailIcon /></span>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@example.com"
-                style={styles.input}
-              />
-            </div>
+          {step === 'login' && (
+            <form onSubmit={handleLogin}>
+              <label style={styles.label}>Email Address</label>
+              <div style={styles.inputWrap}>
+                <span style={styles.inputIcon}><MailIcon /></span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="you@example.com"
+                  style={styles.input}
+                />
+              </div>
 
-            <label style={styles.label}>Password</label>
-            <div style={styles.inputWrap}>
-              <span style={styles.inputIcon}><LockIcon /></span>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Enter your password"
-                style={styles.input}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-                aria-label="Show/hide password"
-              >
-                <EyeIcon />
+              <label style={styles.label}>Password</label>
+              <div style={styles.inputWrap}>
+                <span style={styles.inputIcon}><LockIcon /></span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Enter your password"
+                  style={styles.input}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={styles.eyeButton}
+                  aria-label="Show/hide password"
+                >
+                  <EyeIcon />
+                </button>
+              </div>
+
+              {/* NEW */}
+              <p style={styles.forgotLine}>
+                <button
+                  type="button"
+                  onClick={() => { setResetEmail(email); setStep('forgotRequest'); }}
+                  style={styles.linkButton}
+                >
+                  Forgot password?
+                </button>
+              </p>
+
+              {error && <p style={styles.error}>{error}</p>}
+
+              <button type="submit" disabled={loading} style={styles.primaryButton}>
+                {loading ? 'Signing in...' : (
+                  <>
+                    Sign In <ArrowIcon />
+                  </>
+                )}
               </button>
-            </div>
+            </form>
+          )}
 
-            {error && <p style={styles.error}>{error}</p>}
+          {/* NEW: step 1 -- ask for the email */}
+          {step === 'forgotRequest' && (
+            <form onSubmit={handleRequestReset}>
+              <h2 style={{ ...styles.tagline, color: '#1e2a5e', fontWeight: 700, fontSize: '1.1rem' }}>
+                Reset your password
+              </h2>
+              <p style={{ fontSize: '0.9rem', color: '#555', marginBottom: '1rem' }}>
+                Enter your email and we'll send you a verification code.
+              </p>
 
-            <button type="submit" disabled={loading} style={styles.primaryButton}>
-              {loading ? 'Signing in...' : (
-                <>
-                  Sign In <ArrowIcon />
-                </>
-              )}
-            </button>
-          </form>
+              <label style={styles.label}>Email Address</label>
+              <div style={styles.inputWrap}>
+                <span style={styles.inputIcon}><MailIcon /></span>
+                <input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                  placeholder="you@example.com"
+                  style={styles.input}
+                />
+              </div>
+
+              {resetError && <p style={styles.error}>{resetError}</p>}
+
+              <button type="submit" disabled={resetLoading} style={styles.primaryButton}>
+                {resetLoading ? 'Sending code...' : 'Send Verification Code'}
+              </button>
+
+              <p style={styles.switchLine}>
+                <button type="button" onClick={backToLogin} style={styles.linkButton}>
+                  Back to Login
+                </button>
+              </p>
+            </form>
+          )}
+
+          {/* NEW: step 2 -- code + new password */}
+          {step === 'forgotConfirm' && (
+            <form onSubmit={handleConfirmReset}>
+              <h2 style={{ ...styles.tagline, color: '#1e2a5e', fontWeight: 700, fontSize: '1.1rem' }}>
+                Check your email
+              </h2>
+              <p style={{ fontSize: '0.9rem', color: '#555', marginBottom: '1rem' }}>
+                A code was sent to <strong>{resetEmail}</strong>
+              </p>
+
+              <label style={styles.label}>Verification Code</label>
+              <div style={styles.inputWrap}>
+                <input
+                  type="text"
+                  value={resetCode}
+                  onChange={(e) => setResetCode(e.target.value)}
+                  required
+                  placeholder="123456"
+                  style={{ ...styles.input, paddingLeft: '1rem' }}
+                />
+              </div>
+
+              <label style={styles.label}>New Password</label>
+              <div style={styles.inputWrap}>
+                <span style={styles.inputIcon}><LockIcon /></span>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  placeholder="Create a new password"
+                  style={styles.input}
+                />
+              </div>
+              <p style={styles.passwordHint}>
+                Must contain at least one uppercase letter, one lowercase letter, one digit, and one special character.
+              </p>
+
+              <label style={styles.label}>Confirm New Password</label>
+              <div style={styles.inputWrap}>
+                <span style={styles.inputIcon}><LockIcon /></span>
+                <input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  required
+                  placeholder="Confirm new password"
+                  style={styles.input}
+                />
+              </div>
+
+              {resetError && <p style={styles.error}>{resetError}</p>}
+              {resetSuccess && <p style={styles.success}>{resetSuccess}</p>}
+
+              <button type="submit" disabled={resetLoading} style={styles.primaryButton}>
+                {resetLoading ? 'Resetting...' : 'Reset Password'}
+              </button>
+
+              <p style={styles.switchLine}>
+                <button type="button" onClick={backToLogin} style={styles.linkButton}>
+                  Back to Login
+                </button>
+              </p>
+            </form>
+          )}
         </div>
 
-        <p style={styles.switchLine}>
-          Don't have an account?{' '}
-          <button type="button" onClick={() => navigate('/signup')} style={styles.linkButton}>
-            Sign up here
-          </button>
-        </p>
+        {step === 'login' && (
+          <p style={styles.switchLine}>
+            Don't have an account?{' '}
+            <button type="button" onClick={() => navigate('/signup')} style={styles.linkButton}>
+              Sign up here
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );
