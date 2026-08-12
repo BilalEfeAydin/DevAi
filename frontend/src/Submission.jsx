@@ -96,6 +96,58 @@ function Submission() {
     loadProfile();
   }, []);
 
+  // Fetch past submissions on mount to restore attempt count, AI review, and history
+  useEffect(() => {
+    async function loadPastSubmissions() {
+      try {
+        const session = await fetchAuthSession();
+        const token = session.tokens?.idToken?.toString();
+        const studentId = session.tokens?.idToken?.payload?.sub;
+        if (!studentId) return;
+
+        const res = await fetch(
+          `${API_BASE_URL}/submissions?studentId=${studentId}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        if (!res.ok) return;
+
+        const items = await res.json();
+
+        // Filter to only this course's submissions and sort newest first
+        const cid = courseId || 'test-course';
+        const courseSubmissions = items
+          .filter((item) => item.CourseID === cid)
+          .sort((a, b) => (b.CreatedAt || '').localeCompare(a.CreatedAt || ''));
+
+        if (courseSubmissions.length === 0) return;
+
+        // Restore attempt count
+        setAttemptsUsed(courseSubmissions.length);
+
+        // Restore the most recent AI review
+        const latestWithReview = courseSubmissions.find((s) => s.aiReview);
+        if (latestWithReview?.aiReview) {
+          setAiReview(latestWithReview.aiReview);
+        }
+
+        // Rebuild attempt history (oldest first for display)
+        const history = courseSubmissions
+          .slice()
+          .reverse()
+          .map((s, idx) => ({
+            attemptNumber: idx + 1,
+            files: [{ id: 'main', name: 'main.py', content: s.content || '' }],
+            feedback: s.aiReview || null,
+            timestamp: s.CreatedAt,
+          }));
+        setAttemptHistory(history);
+      } catch (err) {
+        console.warn('Could not load past submissions:', err);
+      }
+    }
+    loadPastSubmissions();
+  }, [courseId]);
+
   const getInitials = () => {
     const first = firstName.charAt(0).toUpperCase();
     const last = lastName.charAt(0).toUpperCase();
