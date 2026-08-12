@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
+import { signOut, fetchUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
+import { API_BASE_URL } from './amplifyConfig';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
@@ -40,6 +41,7 @@ function Submission() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [attemptsUsed, setAttemptsUsed] = useState(0);
   const [output, setOutput] = useState(null); // { status: 'running'|'placeholder', message: string }
+  const [aiReview, setAiReview] = useState(null); // stores Bedrock review object
 
   // MOCK: shape matches what the Bedrock Socratic-review Lambda is expected
   // to return once Sprint 3's "Wire Bedrock into Lambda pipeline" is done.
@@ -123,46 +125,63 @@ function Submission() {
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
 
-  const handleRunTests = () => {
-    // TODO: connect to real Lambda test-runner once backend is ready.
-    // For now this just shows a placeholder in the output panel so the
-    // UI flow is testable before the backend call exists.
-    setOutput({
-      status: 'placeholder',
-      message: 'Test runner not connected yet — this panel will show real test results once the backend Lambda is wired in.',
-    });
+  const handleRunTests = async () => {
+    // Collect all file contents into a single string (main file first)
+    const mainFile = files.find((f) => f.id === 'main') || files[0];
+    const code = mainFile.content;
+
+    setOutput({ status: 'running', message: 'Running your code...' });
+    setAiReview(null);
+
+    try {
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken?.toString();
+
+      const res = await fetch(`${API_BASE_URL}/submissions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          courseId: courseId || 'test-course',
+          studentId: session.tokens?.idToken?.payload?.sub || 'unknown',
+          content: code,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setOutput({ status: 'error', message: data.message || 'Something went wrong.' });
+        return;
+      }
+
+      // Build output from E2B execution results
+      const exec = data.execution || {};
+      setOutput({
+        status: exec.executionStatus || 'passed',
+        stdout: exec.stdout || [],
+        stderr: exec.stderr || [],
+        error: exec.error || null,
+      });
+
+      // Capture AI review if present
+      if (data.aiReview) {
+        setAiReview(data.aiReview);
+      }
+    } catch (err) {
+      console.error('Run Tests error:', err);
+      setOutput({ status: 'error', message: err.message || 'Network error.' });
+    }
   };
 
-  const generateMockFeedback = () => ({
-    status: 'needs_work', // 'needs_work' | 'on_track'
-    questions: [
-      { id: 'q1', text: 'What happens to your loop variable when the list is empty?', line: 4 },
-      { id: 'q2', text: 'Could two different inputs produce the same output here? Why or why not?', line: 7 },
-    ],
-  });
-
-  const handleRunSubmit = () => {
-    if (attemptsUsed >= maxAttempts) return; // safety net, button shouldn't be visible at this point
-    const newAttemptNumber = attemptsUsed + 1;
-    const feedback = generateMockFeedback();
-
-    setAttemptHistory((prev) => [
-      ...prev,
-      {
-        attemptNumber: newAttemptNumber,
-        files: files.map((f) => ({ ...f })), // shallow copy so later edits to `files` don't mutate history
-        feedback,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
-
-    setAttemptsUsed(newAttemptNumber);
-    setAiFeedback(feedback);
-    setViewingAttemptNumber(null); // stay on the live attempt right after submitting
-    setOutput({
-      status: 'placeholder',
-      message: 'Attempt recorded. AI review not connected yet — this panel will show the Socratic reviewer output once the backend Lambda is wired in.',
-    });
+  const handleRunSubmit = async () => {
+    if (attemptsUsed >= maxAttempts) return;
+    setAttemptsUsed((prev) => prev + 1);
+    // For now, Run & Submit does the same as Run Tests.
+    // Once Bedrock is integrated, this will also return AI review feedback.
+    await handleRunTests();
   };
 
   const handleCodeChange = (value) => {
@@ -337,14 +356,48 @@ function Submission() {
             <div style={styles.outputPanel}>
               <div style={styles.outputPanelHeader}>Output</div>
               <div style={styles.outputPanelBody}>
-                {output ? (
-                  <span style={output.status === 'placeholder' ? styles.outputTextMuted : styles.outputText}>
-                    {output.message}
-                  </span>
-                ) : (
+                {!output && (
                   <span style={styles.outputTextMuted}>
                     Run your code to see the output here.
                   </span>
+                )}
+                {output && output.status === 'running' && (
+                  <span style={styles.outputTextMuted}>⏳ {output.message}</span>
+                )}
+                {output && output.status === 'error' && (
+                  <span style={{ ...styles.outputText, color: '#e07a7a' }}>❌ {output.message}</span>
+                )}
+                {output && (output.status === 'passed' || output.status === 'failed') && (
+                  <div>
+                    {output.stdout && output.stdout.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: '0.72rem', color: '#6b7086', marginBottom: '0.3rem', fontWeight: 600 }}>stdout</div>
+                        <pre style={{ ...styles.outputText, color: '#4ade80', margin: 0, whiteSpace: 'pre-wrap' }}>
+                          {output.stdout.join('')}
+                        </pre>
+                      </div>
+                    )}
+                    {output.stderr && output.stderr.length > 0 && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <div style={{ fontSize: '0.72rem', color: '#6b7086', marginBottom: '0.3rem', fontWeight: 600 }}>stderr</div>
+                        <pre style={{ ...styles.outputText, color: '#facc15', margin: 0, whiteSpace: 'pre-wrap' }}>
+                          {output.stderr.join('')}
+                        </pre>
+                      </div>
+                    )}
+                    {output.error && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <div style={{ fontSize: '0.72rem', color: '#6b7086', marginBottom: '0.3rem', fontWeight: 600 }}>error</div>
+                        <pre style={{ ...styles.outputText, color: '#e07a7a', margin: 0, whiteSpace: 'pre-wrap' }}>
+{output.error.name}: {output.error.value}
+{output.error.traceback}
+                        </pre>
+                      </div>
+                    )}
+                    {(!output.stdout || output.stdout.length === 0) && !output.error && (
+                      <span style={styles.outputTextMuted}>Code ran successfully with no output.</span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -384,19 +437,40 @@ function Submission() {
 
             <div style={styles.inquiryCard}>
               <h3 style={styles.inquiryCardTitle}>Socratic Inquiry</h3>
-              {!displayedFeedback ? (
+              {!aiReview ? (
                 <p style={styles.inquiryCardText}>
                   Your AI reviewer's guiding questions will appear here once you submit your first attempt.
                 </p>
               ) : (
-                <ol style={styles.feedbackList}>
-                  {displayedFeedback.questions.map((q) => (
-                    <li key={q.id} style={styles.feedbackItem}>
-                      <span style={styles.feedbackLineTag}>Line {q.line}</span>
-                      <span>{q.text}</span>
-                    </li>
-                  ))}
-                </ol>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#333' }}>
+                    <strong>{aiReview.status === 'PASS' ? '✅ Pass' : '🔍 Review Needed'}:</strong> {aiReview.summary}
+                  </div>
+                  {aiReview.feedback && aiReview.feedback.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.4rem' }}>
+                      {aiReview.feedback.map((fb, idx) => (
+                        <div key={idx} style={{
+                          backgroundColor: fb.type === 'violation' ? '#fff1f2' : (fb.type === 'concern' ? '#fffbeb' : '#f0f9ff'),
+                          borderLeft: `3px solid ${fb.type === 'violation' ? '#f43f5e' : (fb.type === 'concern' ? '#fbbf24' : '#38bdf8')}`,
+                          padding: '0.6rem 0.8rem',
+                          borderRadius: '4px'
+                        }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#555', marginBottom: '0.2rem' }}>
+                            Line {fb.line}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#1a1a1a', lineHeight: 1.4 }}>
+                            {fb.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {aiReview.generalSuggestion && (
+                    <div style={{ fontSize: '0.85rem', color: '#555', fontStyle: 'italic', marginTop: '0.4rem' }}>
+                      💡 {aiReview.generalSuggestion}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
