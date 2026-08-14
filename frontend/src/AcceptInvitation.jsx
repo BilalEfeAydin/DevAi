@@ -3,20 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { NAVY, NAVY_DARK, styles } from './Theme';
 import { CapIcon, BookIcon } from './Icons';
-
-// NOTE (flagged deliberately): mock invitation lookup, keyed by token.
-// Replace with a real fetch (e.g. GET /invitations/:token) once the
-// Enrollment API exists . Real data will carry the
-// same shape: { courseId, courseTitle, instructorName, status }.
-// status: 'invited' | 'accepted' | 'declined'
-const mockInvitations = {
-  'demo-token-c3': {
-    courseId: 'c3',
-    courseTitle: 'Web Development Basics',
-    instructorName: 'Prof. Khelifi',
-    status: 'invited',
-  },
-};
+import { getInvitationByToken, acceptInvitation, declineInvitation } from './mockEnrollments';
 
 function AcceptInvitation() {
   const [searchParams] = useSearchParams();
@@ -30,7 +17,7 @@ function AcceptInvitation() {
 
   useEffect(() => {
     // Look up the invitation from the token
-    const found = token ? mockInvitations[token] : null;
+    const found = token ? getInvitationByToken(token) : null;
     setInvitation(found || null);
 
     // Check whether the student is already logged in
@@ -48,13 +35,13 @@ function AcceptInvitation() {
   }, [token]);
 
   const handleAccept = () => {
-    // NOTE (flagged deliberately): real version should PATCH the enrollment
-    // record (invited -> accepted) once the Enrollment API exists.
+    acceptInvitation(token);
     setInvitation((prev) => ({ ...prev, status: 'accepted' }));
     setActionState('accepted');
   };
 
   const handleDecline = () => {
+    declineInvitation(token);
     setInvitation((prev) => ({ ...prev, status: 'declined' }));
     setActionState('declined');
   };
@@ -189,7 +176,7 @@ function AcceptInvitation() {
                     backgroundColor: '#fff', color: NAVY, fontWeight: 600, cursor: 'pointer',
                   }}
                 >
-                  I'm new here : Sign up
+                  I'm new here — Sign up
                 </button>
               </div>
             </>

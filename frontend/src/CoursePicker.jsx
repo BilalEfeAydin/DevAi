@@ -1,19 +1,8 @@
-// CoursePicker.jsx
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NAVY, NAVY_DARK } from './Theme';
 import { BookIcon, ArrowIcon, CapIcon } from './Icons';
-
-// NOTE (flagged deliberately): status field ('accepted' | 'pending') is
-// hardcoded here. It should come from the Enrollment table (User <-> Course,
-// GSI on StudentID) once that API exists . Real data will carry the same shape: { id, title,
-// instructor, color, status }.
-const courses = [
-  { id: 'c1', title: 'Introduction to Python', instructor: 'Prof. Amrani', color: '#1e2a78', status: 'accepted' },
-  { id: 'c2', title: 'Data Structures & Algorithms', instructor: 'Prof. Bensalah', color: '#7c3aed', status: 'accepted' },
-  { id: 'c3', title: 'Web Development Basics', instructor: 'Prof. Khelifi', color: '#0e9f6e', status: 'pending' },
-];
+import { getAllEnrollments } from './mockEnrollments';
 
 const hoverCSS = `
   .courseCard {
@@ -33,6 +22,7 @@ const hoverCSS = `
 function CoursePicker() {
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState(null);
+  const courses = getAllEnrollments(); // NEW: reads from the shared mock store
 
   const selectedCourse = courses.find((c) => c.id === selectedId) || null;
 
