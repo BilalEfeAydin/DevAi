@@ -7,6 +7,7 @@ import InstructorCourseDashboard from './InstructorCourseDashboard';
 import CoursePicker from './CoursePicker';
 import Submission from './Submission';
 import CourseDescription from './CourseDescription';
+import AcceptInvitation from './AcceptInvitation';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
         <Route path="/courses" element={<CoursePicker />} />
         <Route path="/submission" element={<Submission />} />
         <Route path="/course-description" element={<CourseDescription />} />
+        <Route path="/invite" element={<AcceptInvitation />} />
 
         <Route path="/" element={<Navigate to="/signup" replace />} />
         <Route path="*" element={<Navigate to="/signup" replace />} />

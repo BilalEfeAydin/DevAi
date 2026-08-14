@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { signUp, confirmSignUp, signIn, signOut, fetchUserAttributes, resendSignUpCode } from 'aws-amplify/auth';
 import { styles } from './Theme';
 import { MailIcon, LockIcon, EyeIcon, UserIcon, BookIcon, ArrowIcon, CapIcon, CalendarIcon } from './Icons';
@@ -16,6 +16,7 @@ registerLocale('en-US', enUS);
 
 function Signup() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState('signup');
 
   const [fullName, setFullName] = useState('');
@@ -24,7 +25,7 @@ function Signup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [birthdate, setBirthdate] = useState(null); 
+  const [birthdate, setBirthdate] = useState(null);
   const [gender, setGender] = useState('');
   const [role, setRole] = useState('student');
   const [code, setCode] = useState('');
@@ -33,7 +34,7 @@ function Signup() {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  //  pour l'affichage conditionnel de la règle du mot de passe
+  // pour l'affichage conditionnel de la règle du mot de passe
   const [passwordHovered, setPasswordHovered] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
 
@@ -63,7 +64,6 @@ function Signup() {
       return;
     }
 
-    
     const birthdateStr = birthdate ? format(birthdate, 'yyyy-MM-dd') : '';
 
     setLoading(true);
@@ -120,6 +120,10 @@ function Signup() {
     setError('');
     setLoading(true);
 
+    // STEP 1: confirm the account with the code the user typed in.
+    // This MUST happen before any signIn attempt -- Cognito refuses to
+    // sign in an unconfirmed user (UserNotConfirmedException), which is
+    // exactly the bug we hit when this call went missing.
     try {
       await confirmSignUp({ username: email, confirmationCode: code });
     } catch (err) {
@@ -128,9 +132,9 @@ function Signup() {
       return;
     }
 
-    // Confirmation succeeded -- from here on, any failure is a signIn
-    // problem, NOT a bad code. Handled separately so the error message
-    // stays accurate.
+    // STEP 2: confirmation succeeded -- from here on, any failure is a
+    // signIn problem, NOT a bad code. Handled separately so the error
+    // message stays accurate.
     try {
       try {
         await signOut();
@@ -154,12 +158,18 @@ function Signup() {
         console.warn('Could not fetch user attributes:', attrErr);
       }
 
-      setSuccessMessage('Account verified successfully! Redirecting to your profile...');
+      // NEW: preserve the invite token through signup, same logic as Login.jsx
+      const inviteToken = location.state?.inviteToken;
+      setSuccessMessage('Account verified successfully! Redirecting...');
       setTimeout(() => {
-        navigate(resolvedRole === 'instructor' ? '/profile/instructor' : '/profile/student');
+        if (inviteToken) {
+          navigate(`/invite?token=${inviteToken}`);
+        } else {
+          navigate(resolvedRole === 'instructor' ? '/profile/instructor' : '/profile/student');
+        }
       }, 800);
     } catch (signInErr) {
-      // this covers the case where `password` in state doesn't match
+      // NEW: this covers the case where `password` in state doesn't match
       // what's actually on the account -- e.g. the user refreshed mid-flow,
       // lost state, came back through the UsernameExistsException recovery
       // path, and typed a different password the second time. The account
