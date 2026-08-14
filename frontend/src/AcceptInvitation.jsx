@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { NAVY, NAVY_DARK, styles } from './Theme';
 import { CapIcon, BookIcon } from './Icons';
-import { getInvitationByToken, acceptInvitation, declineInvitation } from './mockEnrollments';
+import { getInvitationByToken, acceptInvitation, declineInvitation } from './Mockenrollments';
 
 function AcceptInvitation() {
   const [searchParams] = useSearchParams();

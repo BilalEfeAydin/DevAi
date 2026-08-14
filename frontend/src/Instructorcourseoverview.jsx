@@ -7,10 +7,7 @@ import {
   BookIcon, CapIcon, BellIcon, HelpIcon,
   MenuIcon, SettingsIcon, UserIcon, MailIcon,
 } from './Icons';
-import {
-  getCourseInfo, getInvitationsForCourse,
-  sendInvitationByEmail, generateShareableLink,
-} from './mockEnrollments';
+import { getCourseInfo, getInvitationsForCourse, sendInvitationByEmail, generateShareableLink } from './Mockenrollments';
 
 // NOTE (flagged deliberately): falls back to 'c1' only if no courseId was
 // passed via navigation state -- e.g. someone lands here directly by URL

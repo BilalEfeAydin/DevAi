@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NAVY, NAVY_DARK } from './Theme';
 import { BookIcon, ArrowIcon, CapIcon } from './Icons';
-import { getAllEnrollments } from './mockEnrollments';
+import { getAllEnrollments } from './Mockenrollments';
 
 const hoverCSS = `
   .courseCard {
