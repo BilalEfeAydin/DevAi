@@ -77,13 +77,16 @@ function InstructorProfile() {
     return first + last || '?';
   };
 
-  // Dashboard = Sprint 6 analytics .
-  // Configuration = Sprint 5 rule/honor-code UI .
-  // Both disabled until those sprints are actually done -- Profile is the
-  // real landing page and stays active.
+  // Dashboard = Sprint 6 analytics (aggregate across ALL of this
+  // instructor's courses/exercises, e.g. "50% of students struggling on
+  // Algorithms exercise 4"). Disabled until Sprint 6 -- do not reopen this
+  // scope mid-Sprint-5 (team rule).
+  //
+  // NOTE: 'Configuration' was removed from this level -- rule/honor-code
+  // configuration is per-exercise, not per-instructor-profile. It will
+  // live inside a course's Exercises tab once that's built, not here.
   const navItems = [
     { label: 'Dashboard', icon: <ChartIcon />, active: false, disabled: true, onClick: undefined },
-    { label: 'Configuration', icon: <SettingsIcon />, active: false, disabled: true, onClick: undefined },
     { label: 'Profile', icon: <UserIcon />, active: true, disabled: false, onClick: undefined },
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];

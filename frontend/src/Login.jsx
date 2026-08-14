@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { signIn, signOut, fetchUserAttributes, resetPassword, confirmResetPassword } from 'aws-amplify/auth';
 import { styles } from './Theme';
 import { MailIcon, LockIcon, EyeIcon, ArrowIcon, CapIcon } from './Icons';
@@ -8,6 +8,7 @@ const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [step, setStep] = useState('login'); // 'login' | 'forgotRequest' | 'forgotConfirm'
 
@@ -18,7 +19,6 @@ function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // NEW: forgot-password flow state
   const [resetEmail, setResetEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -54,7 +54,13 @@ function Login() {
         console.warn('Could not fetch user attributes:', attrErr);
       }
 
-      if (role === 'instructor') {
+      // NEW: if we arrived here from an invitation link, go back there
+      // instead of the normal profile redirect, so the student sees the
+      // Accept/Decline screen right after logging in.
+      const inviteToken = location.state?.inviteToken;
+      if (inviteToken) {
+        navigate(`/invite?token=${inviteToken}`);
+      } else if (role === 'instructor') {
         navigate('/profile/instructor');
       } else if (role === 'student') {
         navigate('/profile/student');
@@ -77,7 +83,6 @@ function Login() {
     }
   };
 
-  // NEW: step 1 -- request a reset code via Cognito
   const handleRequestReset = async (e) => {
     e.preventDefault();
     setResetError('');
@@ -90,10 +95,6 @@ function Login() {
       setStep('forgotConfirm');
     } catch (err) {
       if (err.name === 'UserNotFoundException') {
-        // NOTE: Cognito can be configured to hide whether an account exists,
-        // to avoid leaking which emails are registered. If that setting is
-        // ever turned on, this branch won't fire the same way -- treat this
-        // message as best-effort, not a guarantee.
         setResetError('No account found with this email.');
       } else if (err.name === 'LimitExceededException') {
         setResetError('Too many attempts. Please wait a moment and try again.');
@@ -105,7 +106,6 @@ function Login() {
     }
   };
 
-  // NEW: step 2 -- confirm the code + set the new password
   const handleConfirmReset = async (e) => {
     e.preventDefault();
     setResetError('');
@@ -206,7 +206,6 @@ function Login() {
                 </button>
               </div>
 
-              {/* NEW */}
               <p style={styles.forgotLine}>
                 <button
                   type="button"
@@ -229,7 +228,6 @@ function Login() {
             </form>
           )}
 
-          {/* NEW: step 1 -- ask for the email */}
           {step === 'forgotRequest' && (
             <form onSubmit={handleRequestReset}>
               <h2 style={{ ...styles.tagline, color: '#1e2a5e', fontWeight: 700, fontSize: '1.1rem' }}>
@@ -266,7 +264,6 @@ function Login() {
             </form>
           )}
 
-          {/* NEW: step 2 -- code + new password */}
           {step === 'forgotConfirm' && (
             <form onSubmit={handleConfirmReset}>
               <h2 style={{ ...styles.tagline, color: '#1e2a5e', fontWeight: 700, fontSize: '1.1rem' }}>

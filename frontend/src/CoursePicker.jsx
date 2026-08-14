@@ -2,18 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NAVY, NAVY_DARK } from './Theme';
 import { BookIcon, ArrowIcon, CapIcon } from './Icons';
-
-// NOTE (flagged deliberately): these courses are hardcoded placeholders.
-// There is no Courses table / API yet (student -> course enrollment is
-// planned to come from an instructor invite link, not built). Replace
-// this array with a real fetch (e.g. GET /courses for the logged-in
-// student) once that backend piece exists. Nothing else in this file
-// needs to change -- the render logic already maps over `courses`.
-const courses = [
-  { id: 'c1', title: 'Introduction to Python', instructor: 'Prof. Amrani', color: '#1e2a78' },
-  { id: 'c2', title: 'Data Structures & Algorithms', instructor: 'Prof. Bensalah', color: '#7c3aed' },
-  { id: 'c3', title: 'Web Development Basics', instructor: 'Prof. Khelifi', color: '#0e9f6e' },
-];
+import { getAllEnrollments } from './mockEnrollments';
 
 const hoverCSS = `
   .courseCard {
@@ -24,21 +13,30 @@ const hoverCSS = `
     box-shadow: 0 8px 20px rgba(30, 42, 120, 0.14);
     transform: translateY(-2px);
   }
+  .courseCard.pending:hover {
+    box-shadow: none;
+    transform: none;
+  }
 `;
 
 function CoursePicker() {
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState(null);
+  const courses = getAllEnrollments(); // NEW: reads from the shared mock store
 
   const selectedCourse = courses.find((c) => c.id === selectedId) || null;
 
- const handleContinue = () => {
-  if (!selectedCourse) return;
-  // CourseDescription.jsx reads this via useLocation().state -- see that file.
-  navigate('/course-description', {
-    state: { courseId: selectedCourse.id, courseTitle: selectedCourse.title },
-  });
-};
+  const handleCardClick = (course) => {
+    if (course.status === 'pending') return; // not accepted yet -- can't select
+    setSelectedId(course.id);
+  };
+
+  const handleContinue = () => {
+    if (!selectedCourse) return;
+    navigate('/course-description', {
+      state: { courseId: selectedCourse.id, courseTitle: selectedCourse.title },
+    });
+  };
 
   return (
     <div style={styles.page}>
@@ -65,25 +63,33 @@ function CoursePicker() {
         <div style={styles.grid}>
           {courses.map((course) => {
             const isSelected = course.id === selectedId;
+            const isPending = course.status === 'pending';
             return (
               <div
                 key={course.id}
-                className="courseCard"
-                onClick={() => setSelectedId(course.id)}
+                className={`courseCard${isPending ? ' pending' : ''}`}
+                onClick={() => handleCardClick(course)}
                 style={{
                   ...styles.courseCard,
                   borderColor: isSelected ? NAVY : '#e7eaf5',
-                  backgroundColor: isSelected ? '#f5f7ff' : '#fff',
+                  backgroundColor: isPending ? '#f7f7f9' : (isSelected ? '#f5f7ff' : '#fff'),
+                  cursor: isPending ? 'not-allowed' : 'pointer',
+                  opacity: isPending ? 0.65 : 1,
                 }}
               >
                 <span style={{ ...styles.courseIcon, backgroundColor: course.color + '1a', color: course.color }}>
                   <BookIcon />
                 </span>
                 <div style={styles.courseText}>
-                  <div style={styles.courseTitle}>{course.title}</div>
+                  <div style={styles.courseTitle}>
+                    {course.title}
+                    {isPending && <span style={styles.pendingBadge}>Pending</span>}
+                  </div>
                   <div style={styles.courseInstructor}>{course.instructor}</div>
                 </div>
-                <span style={isSelected ? styles.radioSelected : styles.radio} />
+                {!isPending && (
+                  <span style={isSelected ? styles.radioSelected : styles.radio} />
+                )}
               </div>
             );
           })}
@@ -136,8 +142,12 @@ const styles = {
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   courseText: { flex: 1, textAlign: 'left' },
-  courseTitle: { fontSize: '0.95rem', fontWeight: 700, color: '#1a1a1a' },
+  courseTitle: { fontSize: '0.95rem', fontWeight: 700, color: '#1a1a1a', display: 'flex', alignItems: 'center', gap: '0.5rem' },
   courseInstructor: { fontSize: '0.8rem', color: '#777', marginTop: '0.15rem' },
+  pendingBadge: {
+    fontSize: '0.65rem', fontWeight: 700, color: '#a16207', backgroundColor: '#fef3c7',
+    padding: '0.15rem 0.5rem', borderRadius: '999px', textTransform: 'uppercase', letterSpacing: '0.03em',
+  },
   radio: {
     width: 18, height: 18, borderRadius: '50%', border: '2px solid #d7dce8', flexShrink: 0,
   },
