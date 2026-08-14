@@ -14,20 +14,24 @@
 //   7. Return everything to the frontend
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, UpdateCommand, QueryCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
 import { Sandbox } from "@e2b/code-interpreter";
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
 const bedrockClient = new BedrockRuntimeClient({ region: "us-east-1" });
+const s3Client = new S3Client({});
 
 const TABLE_NAME = process.env.TABLE_NAME || "DevAi-Submissions";
 const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || "us.anthropic.claude-haiku-4-5-20251001-v1:0";
+const COURSES_TABLE = process.env.COURSES_TABLE_NAME || "DevAi-Courses";
+const HONOR_CODE_BUCKET = process.env.HONOR_CODE_BUCKET || "devai-honor-code-docs";
 
-// ── Hardcoded honor code (will be replaced with S3 fetch once Teacher API is built) ──
-const HONOR_CODE = `
+// ── Hardcoded honor code fallback (used if a course has no rules mapped) ──
+const HONOR_CODE_FALLBACK = `
 University Honor Code — CS Department:
 1. Students must write their own code. Copy-pasting from external sources is prohibited.
 2. Students may discuss high-level ideas with peers, but must not share or copy code.
@@ -35,6 +39,48 @@ University Honor Code — CS Department:
    not for generating submission code.
 4. All submitted code must include comments explaining the student's reasoning.
 `;
+
+// ── Fetch course-specific honor code from S3 ────────────────────────
+async function fetchHonorCode(courseId) {
+  try {
+    // 1. Look up the course in DynamoDB
+    const courseRes = await ddb.send(new GetCommand({
+      TableName: COURSES_TABLE,
+      Key: { CourseID: courseId }
+    }));
+    
+    if (!courseRes.Item || !courseRes.Item.HonorCodeDocURI) {
+      console.log(`No custom honor code URI found for course ${courseId}. Using fallback.`);
+      return HONOR_CODE_FALLBACK;
+    }
+
+    const s3Uri = courseRes.Item.HonorCodeDocURI;
+    
+    // 2. Parse the S3 URI (e.g., s3://devai-honor-code-docs/CS101/honor-code.txt)
+    // Matches s3://bucket/key
+    const match = s3Uri.match(/^s3:\/\/([^\/]+)\/(.+)$/);
+    if (!match) {
+      console.warn(`Invalid S3 URI format for course ${courseId}: ${s3Uri}. Using fallback.`);
+      return HONOR_CODE_FALLBACK;
+    }
+
+    const bucketName = match[1];
+    const objectKey = match[2];
+
+    // 3. Fetch object from S3
+    const s3Res = await s3Client.send(new GetObjectCommand({
+      Bucket: bucketName,
+      Key: objectKey,
+    }));
+
+    // 4. Read stream to string
+    const honorCodeText = await s3Res.Body.transformToString("utf-8");
+    return honorCodeText;
+  } catch (err) {
+    console.warn(`Failed to fetch custom honor code for course ${courseId}: ${err.message}. Using fallback.`);
+    return HONOR_CODE_FALLBACK;
+  }
+}
 
 // ── Build graduated system prompt based on attempt number ──────────
 function buildSystemPrompt(attemptNumber, hasPreviousReview) {
@@ -156,7 +202,7 @@ async function fetchPreviousSubmission(studentId, courseId) {
 }
 
 // ── Call Bedrock AI for code review ───────────────────────────────
-async function reviewWithBedrock(code, attemptNumber, previousReview) {
+async function reviewWithBedrock(code, attemptNumber, previousReview, honorCode) {
   // Add line numbers to the code
   const numberedCode = code
     .split("\n")
@@ -179,7 +225,7 @@ async function reviewWithBedrock(code, attemptNumber, previousReview) {
   let userMessage = `Please review the following student code submission against the honor code.
 
 <honor_code>
-${HONOR_CODE}
+${honorCode}
 </honor_code>
 
 <student_code>
@@ -326,7 +372,8 @@ export const handler = async (event) => {
       attemptNumber = count + 1;
 
       try {
-        aiReview = await reviewWithBedrock(content, attemptNumber, previousReview);
+        const honorCode = await fetchHonorCode(courseId);
+        aiReview = await reviewWithBedrock(content, attemptNumber, previousReview, honorCode);
       } catch (bedrockErr) {
         console.error("Bedrock AI review error:", bedrockErr);
         aiReview = {

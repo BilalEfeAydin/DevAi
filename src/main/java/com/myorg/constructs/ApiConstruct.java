@@ -11,6 +11,7 @@ import software.amazon.awscdk.services.lambda.Function;
 import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.dynamodb.Table;
+import software.amazon.awscdk.services.s3.Bucket;
 
 import software.amazon.awscdk.services.apigatewayv2.CfnApi;
 import software.amazon.awscdk.services.apigatewayv2.CfnStage;
@@ -35,7 +36,7 @@ public class ApiConstruct extends Construct {
     private final Function postSubmissionFn;
     private final Function orchestratorFn;
 
-    public ApiConstruct(final Construct scope, final String id, final Table submissionsTable) {
+    public ApiConstruct(final Construct scope, final String id, final Table submissionsTable, final Table coursesTable, final Bucket honorCodeBucket) {
         super(scope, id);
 
         // =============================================
@@ -63,7 +64,9 @@ public class ApiConstruct extends Construct {
                 .environment(Map.of(
                         "TABLE_NAME", submissionsTable.getTableName(),
                         "E2B_API_KEY", SecretValue.secretsManager("E2BApiKey").unsafeUnwrap(),
-                        "BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+                        "BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+                        "COURSES_TABLE_NAME", coursesTable.getTableName(),
+                        "HONOR_CODE_BUCKET", honorCodeBucket.getBucketName()
                 ))
                 .build();
 
@@ -82,6 +85,10 @@ public class ApiConstruct extends Construct {
         // Grant the controller Lambdas read/write access to the Submissions table + indexes
         submissionsTable.grantReadData(this.getSubmissionFn);
         submissionsTable.grantReadWriteData(this.postSubmissionFn);
+
+        // Grant postSubmission permission to read from Courses table and Honor Code bucket
+        coursesTable.grantReadData(this.postSubmissionFn);
+        honorCodeBucket.grantRead(this.postSubmissionFn);
 
         // Grant postSubmission permission to invoke Bedrock models (for AI code review)
         // NOTE: The "us." model ID prefix enables cross-region inference, meaning

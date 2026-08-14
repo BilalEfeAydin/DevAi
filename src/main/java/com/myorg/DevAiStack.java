@@ -37,7 +37,7 @@ public class DevAiStack extends Stack {
         // =============================================
         // API (Lambda + API Gateway)
         // =============================================
-        final ApiConstruct api = new ApiConstruct(this, "Api", database.getSubmissionsTable());
+        final ApiConstruct api = new ApiConstruct(this, "Api", database.getSubmissionsTable(), database.getCoursesTable(), storage.getHonorCodeBucket());
 
         // =============================================
         // AUTH (Cognito Post-Confirmation trigger)
