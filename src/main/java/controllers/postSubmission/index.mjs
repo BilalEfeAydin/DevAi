@@ -169,17 +169,18 @@ Do NOT include any markdown syntax.
 The very first character of your response MUST be '{' and the very last character MUST be '}'.`;
 }
 
-// ── Fetch previous submission for this student + course ─────────────
-async function fetchPreviousSubmission(studentId, courseId) {
+// ── Fetch previous submission for this student + course + assignment ─────────────
+async function fetchPreviousSubmission(studentId, courseId, assignmentId) {
   try {
     const result = await ddb.send(new QueryCommand({
       TableName: TABLE_NAME,
       IndexName: "StudentIndex",
       KeyConditionExpression: "StudentID = :sid",
-      FilterExpression: "CourseID = :cid",
+      FilterExpression: "CourseID = :cid AND AssignmentID = :aid",
       ExpressionAttributeValues: {
         ":sid": studentId,
         ":cid": courseId,
+        ":aid": assignmentId || "default",
       },
       ScanIndexForward: false, // Newest first
     }));
@@ -291,7 +292,7 @@ ${JSON.stringify(previousReview, null, 2)}
 export const handler = async (event) => {
   try {
     const body = typeof event.body === "string" ? JSON.parse(event.body) : (event.body || {});
-    const { courseId, studentId, content, submitForReview } = body;
+    const { courseId, studentId, content, submitForReview, assignmentId } = body;
 
     if (!courseId || !studentId || !content) {
       return respond(400, { message: "courseId, studentId and content are required" });
@@ -305,6 +306,7 @@ export const handler = async (event) => {
       const item = {
         SubmissionID: submissionId,
         CourseID: courseId,
+        AssignmentID: assignmentId || "default",
         StudentID: studentId,
         content,
         status: "submitted",
@@ -368,7 +370,7 @@ export const handler = async (event) => {
     let attemptNumber = null;
 
     if (submitForReview) {
-      const { count, previousReview } = await fetchPreviousSubmission(studentId, courseId);
+      const { count, previousReview } = await fetchPreviousSubmission(studentId, courseId, assignmentId);
       attemptNumber = count + 1;
 
       try {
