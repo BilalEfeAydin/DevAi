@@ -4,13 +4,12 @@ import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
 import { NAVY, NAVY_DARK } from './Theme';
 import Sidebar from './Sidebar';
 import {
-   BookIcon, CapIcon, BellIcon,
+  BookIcon, CapIcon, BellIcon,
   HelpIcon, MenuIcon, SettingsIcon, ArrowIcon
 } from './Icons';
+import { getCourseDetails } from './mockEnrollments';
 
-// NOTE (flagged deliberately): mocked exercises, same placeholder pattern as
-// CoursePicker.jsx's `courses` array. Replace with a real fetch
-// (e.g. GET /courses/:id/exercises) once that backend piece exists.
+// Mock exercises (unchanged)
 const exercisesByCourse = {
   c1: [
     { id: 'e1', title: 'Variables & Data Types', badge: 'Fundamentals', description: "Practice declaring variables and using Python's core data types.", maxAttempts: 5, starterCode: '# Declare a variable named "age" and print it\n\n' },
@@ -44,30 +43,40 @@ function CourseDescription() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [view, setView] = useState('course'); // 'course' | 'exercises'
-   const [firstName, setFirstName] = useState('');
-const [lastName, setLastName] = useState('');
-const [loadingProfile, setLoadingProfile] = useState(true);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [courseDetails, setCourseDetails] = useState(null);
 
-useEffect(() => {
-  async function loadProfile() {
-    try {
-      const attrs = await fetchUserAttributes();
-      setFirstName(attrs.name || '');
-      setLastName(attrs.family_name || '');
-    } catch (err) {
-      console.warn('Could not load profile attributes:', err);
-    } finally {
-      setLoadingProfile(false);
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const attrs = await fetchUserAttributes();
+        setFirstName(attrs.name || '');
+        setLastName(attrs.family_name || '');
+      } catch (err) {
+        console.warn('Could not load profile attributes:', err);
+      } finally {
+        setLoadingProfile(false);
+      }
     }
-  }
-  loadProfile();
-}, []);
+    loadProfile();
+  }, []);
 
-const getInitials = () => {
-  const first = firstName.charAt(0).toUpperCase();
-  const last = lastName.charAt(0).toUpperCase();
-  return first + last || '?';
-};
+  // Fetch course details from mock store
+  useEffect(() => {
+    if (courseId) {
+      const details = getCourseDetails(courseId);
+      setCourseDetails(details);
+    }
+  }, [courseId]);
+
+  const getInitials = () => {
+    const first = firstName.charAt(0).toUpperCase();
+    const last = lastName.charAt(0).toUpperCase();
+    return first + last || '?';
+  };
+
   const exercises = exercisesByCourse[courseId] || [];
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
@@ -83,30 +92,36 @@ const getInitials = () => {
 
   const navItems = [
     {
-      label: 'Course', icon: <BookIcon />, active: view === 'course', disabled: false,
+      label: 'Course',
+      icon: <BookIcon />,
+      active: view === 'course',
+      disabled: false,
       onClick: () => { setView('course'); closeSidebar(); },
     },
     {
-      label: 'Exercises', icon: <CapIcon />, active: view === 'exercises', disabled: false,
+      label: 'Exercises',
+      icon: <CapIcon />,
+      active: view === 'exercises',
+      disabled: false,
       onClick: () => { setView('exercises'); closeSidebar(); },
     },
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
 
- const handleSelectExercise = (exercise) => {
-  navigate('/submission', {
-    state: {
-      courseId,
-      courseTitle,
-      exerciseId: exercise.id,
-      exerciseTitle: exercise.title,
-      exerciseDescription: exercise.description,
-      exerciseBadge: exercise.badge,
-      maxAttempts: exercise.maxAttempts,
-      starterCode: exercise.starterCode,
-    },
-  });
-};
+  const handleSelectExercise = (exercise) => {
+    navigate('/submission', {
+      state: {
+        courseId,
+        courseTitle,
+        exerciseId: exercise.id,
+        exerciseTitle: exercise.title,
+        exerciseDescription: exercise.description,
+        exerciseBadge: exercise.badge,
+        maxAttempts: exercise.maxAttempts,
+        starterCode: exercise.starterCode,
+      },
+    });
+  };
 
   return (
     <div style={styles.page}>
@@ -132,48 +147,95 @@ const getInitials = () => {
             <span style={styles.headerIconButton}><BellIcon /></span>
             <span style={styles.headerIconButton}><SettingsIcon /></span>
             <span style={styles.avatarCircle} onClick={() => navigate('/profile/student')}>
-  {loadingProfile ? '...' : getInitials()}
-</span>
+              {loadingProfile ? '...' : getInitials()}
+            </span>
           </div>
         </header>
 
         {view === 'course' && (
-          <div style={styles.courseCard}>
-            <span style={styles.courseIcon}><BookIcon /></span>
-            <div>
+          <div style={styles.overviewContainer}>
+            {/* Course title and meta */}
+            <div style={styles.courseHeader}>
               <h2 style={styles.courseTitle}>{courseTitle}</h2>
-              <p style={styles.courseMeta}>Instructor profile coming soon</p>
-              <p style={styles.courseDescription}>
-                This course covers the fundamentals through hands-on exercises reviewed
-                by DevAI's Socratic AI reviewer. Pick an exercise from the sidebar to get started.
-              </p>
-              <button type="button" onClick={() => setView('exercises')} style={styles.primaryButton}>
-                View Exercises <ArrowIcon />
-              </button>
+              <p style={styles.courseMeta}>Instructor: coming soon</p>
             </div>
+
+            {/* Description */}
+            <section style={styles.card}>
+              <h3 style={styles.cardTitle}>Course Description</h3>
+              <p style={styles.cardText}>
+                {courseDetails?.description || 'No description available for this course.'}
+              </p>
+            </section>
+
+            {/* Notions */}
+            <section style={styles.card}>
+              <h3 style={styles.cardTitle}>Notions to Acquire</h3>
+              {courseDetails?.notions?.length ? (
+                <ul style={styles.list}>
+                  {courseDetails.notions.map((item, idx) => (
+                    <li key={idx} style={styles.listItem}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={styles.cardText}>No notions defined yet.</p>
+              )}
+            </section>
+
+            {/* Rules */}
+            <section style={styles.card}>
+              <h3 style={styles.cardTitle}>General Rules</h3>
+              {courseDetails?.rules?.length ? (
+                <ul style={styles.list}>
+                  {courseDetails.rules.map((item, idx) => (
+                    <li key={idx} style={styles.listItem}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={styles.cardText}>No rules defined yet.</p>
+              )}
+            </section>
+
+            {/* Tips */}
+            <section style={styles.card}>
+              <h3 style={styles.cardTitle}>Tips to Succeed</h3>
+              {courseDetails?.tips?.length ? (
+                <ul style={styles.list}>
+                  {courseDetails.tips.map((item, idx) => (
+                    <li key={idx} style={styles.listItem}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={styles.cardText}>No tips defined yet.</p>
+              )}
+            </section>
           </div>
         )}
 
         {view === 'exercises' && (
-          <div style={styles.exerciseGrid}>
-            {exercises.length === 0 && (
+          <div style={styles.exerciseContainer}>
+            <h2 style={styles.exerciseSectionTitle}>Exercises</h2>
+            {exercises.length === 0 ? (
               <p style={styles.emptyText}>No exercises have been opened for this course yet.</p>
-            )}
-            {exercises.map((exercise) => (
-              <div
-                key={exercise.id}
-                className="exerciseCard"
-                onClick={() => handleSelectExercise(exercise)}
-                style={styles.exerciseCard}
-              >
-                <div style={styles.exerciseTopRow}>
-                  <span style={styles.exerciseBadge}>{exercise.badge}</span>
-                  <span style={styles.exerciseArrow}><ArrowIcon /></span>
-                </div>
-                <div style={styles.exerciseTitle}>{exercise.title}</div>
-                <div style={styles.exerciseDescriptionText}>{exercise.description}</div>
+            ) : (
+              <div style={styles.exerciseGrid}>
+                {exercises.map((exercise) => (
+                  <div
+                    key={exercise.id}
+                    className="exerciseCard"
+                    onClick={() => handleSelectExercise(exercise)}
+                    style={styles.exerciseCard}
+                  >
+                    <div style={styles.exerciseTopRow}>
+                      <span style={styles.exerciseBadge}>{exercise.badge}</span>
+                      <span style={styles.exerciseArrow}><ArrowIcon /></span>
+                    </div>
+                    <div style={styles.exerciseTitle}>{exercise.title}</div>
+                    <div style={styles.exerciseDescriptionText}>{exercise.description}</div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
       </main>
@@ -194,31 +256,46 @@ const styles = {
     width: 34, height: 34, borderRadius: '50%', backgroundColor: NAVY, color: '#fff',
     display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
   },
-  courseCard: {
-    backgroundColor: '#fff', borderRadius: '14px', boxShadow: '0 4px 16px rgba(30,42,120,0.08)',
-    padding: '2rem', display: 'flex', gap: '1.2rem', alignItems: 'flex-start',
+
+  // Course overview styles (aligned with InstructorCourseOverview)
+  overviewContainer: { display: 'flex', flexDirection: 'column', gap: '1.2rem' },
+  courseHeader: { marginBottom: '0.2rem' },
+  courseTitle: { color: '#1a1a1a', fontSize: '1.4rem', fontWeight: 800, margin: 0 },
+  courseMeta: { color: '#777', fontSize: '0.85rem', margin: '0.2rem 0 0' },
+
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: '14px',
+    boxShadow: '0 4px 16px rgba(30,42,120,0.08)',
+    padding: '1.5rem',
   },
-  courseIcon: {
-    width: 52, height: 52, borderRadius: '12px', backgroundColor: 'rgba(30,42,120,0.1)',
-    color: NAVY, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  courseTitle: { margin: 0, fontSize: '1.3rem', color: '#1a1a1a' },
-  courseMeta: { fontSize: '0.85rem', color: '#888', margin: '0.3rem 0 0.8rem' },
-  courseDescription: { fontSize: '0.9rem', color: '#555', lineHeight: 1.5, marginBottom: '1.2rem' },
-  primaryButton: {
-    padding: '0.65rem 1.2rem', backgroundImage: `linear-gradient(135deg, ${NAVY}, ${NAVY_DARK})`,
-    color: '#fff', border: 'none', borderRadius: '9px', fontSize: '0.9rem', fontWeight: 600,
-    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem',
-  },
+  cardTitle: { margin: 0, fontSize: '1.1rem', color: '#1a1a1a' },
+  cardText: { fontSize: '0.9rem', color: '#444', lineHeight: 1.6, margin: '0.6rem 0 0' },
+  list: { margin: '0.6rem 0 0', paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' },
+  listItem: { fontSize: '0.88rem', color: '#444', lineHeight: 1.5 },
+
+  // Exercises list (unchanged styling)
+  exerciseContainer: { display: 'flex', flexDirection: 'column', gap: '1rem' },
+  exerciseSectionTitle: { fontSize: '1.2rem', fontWeight: 700, color: '#1a1a1a', margin: 0 },
   exerciseGrid: { display: 'flex', flexDirection: 'column', gap: '0.8rem' },
   exerciseCard: {
-    backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e7eaf5', padding: '1.1rem 1.3rem',
-    display: 'flex', flexDirection: 'column', gap: '0.5rem', cursor: 'pointer',
+    backgroundColor: '#fff',
+    borderRadius: '12px',
+    border: '1px solid #e7eaf5',
+    padding: '1.1rem 1.3rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+    cursor: 'pointer',
   },
   exerciseTopRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   exerciseBadge: {
-    fontSize: '0.7rem', fontWeight: 700, color: '#7c3aed', backgroundColor: '#f3ecff',
-    padding: '0.25rem 0.6rem', borderRadius: '999px',
+    fontSize: '0.7rem',
+    fontWeight: 700,
+    color: '#7c3aed',
+    backgroundColor: '#f3ecff',
+    padding: '0.25rem 0.6rem',
+    borderRadius: '999px',
   },
   exerciseArrow: { color: '#999', display: 'flex' },
   exerciseTitle: { fontSize: '0.95rem', fontWeight: 700, color: '#1a1a1a' },

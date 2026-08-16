@@ -8,6 +8,7 @@ import Submission from './Submission';
 import CourseDescription from './CourseDescription';
 import AcceptInvitation from './AcceptInvitation';
 import InstructorCourseOverview from './InstructorCourseOverview';
+import RegisterCourse from './RegisterCourse'; // new
 
 function App() {
   return (
@@ -22,11 +23,8 @@ function App() {
         <Route path="/course-description" element={<CourseDescription />} />
         <Route path="/invite" element={<AcceptInvitation />} />
         <Route path="/instructor/course-dashboard" element={<InstructorCourseOverview />} />
-
-        {/* Default route: anyone landing on "/" goes to login for now */}
+        <Route path="/register-course" element={<RegisterCourse />} /> {/* new */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* Catch-all: unknown URLs fall back to login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
