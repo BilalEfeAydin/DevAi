@@ -3,7 +3,10 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { fetchUserAttributes } from 'aws-amplify/auth';
 import { NAVY, NAVY_DARK, styles } from './Theme';
 import { CapIcon, BookIcon } from './Icons';
-import { getInvitationByToken, acceptInvitation, declineInvitation } from './Mockenrollments';
+import {
+  getInvitationByToken, acceptInvitation, declineInvitation,
+  attachEmailToInvitation,
+} from './Mockenrollments';
 
 function AcceptInvitation() {
   const [searchParams] = useSearchParams();
@@ -16,22 +19,33 @@ function AcceptInvitation() {
   const [actionState, setActionState] = useState('idle'); // 'idle' | 'accepted' | 'declined'
 
   useEffect(() => {
-    // Look up the invitation from the token
-    const found = token ? getInvitationByToken(token) : null;
-    setInvitation(found || null);
+    let cancelled = false;
 
-    // Check whether the student is already logged in
-    async function checkAuth() {
+    async function init() {
+      const found = token ? getInvitationByToken(token) : null;
+      if (!cancelled) setInvitation(found);
+
       try {
-        await fetchUserAttributes();
+        const attrs = await fetchUserAttributes();
+        if (cancelled) return;
         setIsAuthenticated(true);
+
+        // NEW: if this is a generic shareable link (email was still null),
+        // attach the signed-in student's real email now, so the
+        // instructor sees who actually used the link instead of a
+        // "Shareable link" / "Awaiting student access" placeholder.
+        if (found && !found.email && attrs.email) {
+          attachEmailToInvitation(token, attrs.email);
+        }
       } catch {
-        setIsAuthenticated(false);
+        if (!cancelled) setIsAuthenticated(false);
       } finally {
-        setAuthChecked(true);
+        if (!cancelled) setAuthChecked(true);
       }
     }
-    checkAuth();
+
+    init();
+    return () => { cancelled = true; };
   }, [token]);
 
   const handleAccept = () => {

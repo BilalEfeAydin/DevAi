@@ -7,7 +7,11 @@ import {
   BookIcon, CapIcon, BellIcon, HelpIcon,
   MenuIcon, SettingsIcon, UserIcon, MailIcon,
 } from './Icons';
-import { getCourseInfo, getInvitationsForCourse, sendInvitationByEmail, generateShareableLink } from './Mockenrollments';
+import {
+  getCourseInfo, getCourseDetails, getInvitationsForCourse,
+  sendInvitationByEmail, generateShareableLink,
+} from './Mockenrollments';
+
 
 // NOTE (flagged deliberately): falls back to 'c1' only if no courseId was
 // passed via navigation state -- e.g. someone lands here directly by URL
@@ -17,17 +21,41 @@ import { getCourseInfo, getInvitationsForCourse, sendInvitationByEmail, generate
 // student side.
 const FALLBACK_COURSE_ID = 'c1';
 
+// Modern pill-style inputs need a real black placeholder, which inline
+// styles can't target (::placeholder isn't a real DOM state) -- hence
+// this tiny injected stylesheet, same pattern as hoverCSS elsewhere in
+// the project (CoursePicker.jsx, CourseDescription.jsx, etc.).
+const inviteCSS = `
+  .inviteInput::placeholder {
+    color: #1a1a1a;
+    opacity: 0.45;
+  }
+  .inviteInput:focus {
+    border-color: ${NAVY};
+    box-shadow: 0 0 0 3px rgba(30, 42, 120, 0.12);
+  }
+  .invitePillButton:hover {
+    filter: brightness(1.05);
+  }
+  .invitePillButton:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
 function InstructorCourseOverview() {
   const navigate = useNavigate();
   const location = useLocation();
   const COURSE_ID = location.state?.courseId || FALLBACK_COURSE_ID;
 
+  const [view, setView] = useState('overview'); // 'overview' | 'students'
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   const course = getCourseInfo(COURSE_ID);
+  const details = getCourseDetails(COURSE_ID);
 
   const [invitations, setInvitations] = useState(() => getInvitationsForCourse(COURSE_ID));
 
@@ -72,18 +100,16 @@ function InstructorCourseOverview() {
   };
 
   // NOTE (flagged deliberately):
-  // - 'Overview' here means "course description" (title, syllabus text --
-  //   mirrors CourseDescription.jsx's student-facing 'course' view). Not
-  //   built yet, disabled placeholder.
-  // - 'Students' is what THIS page currently renders (invite by
-  //   email/link + invitation list). Renamed from 'Overview' to avoid the
-  //   two meanings colliding under one label.
+  // - 'Overview' = course description (title, notions, rules, tips).
+  //   Built now, on this page.
+  // - 'Students' = invite by email/link + invitation list. This is what
+  //   used to be called 'Overview' before the rename.
   // - 'Exercises' will lead to exercise creation + Rule Configuration
-  //   (the Naming Conventions / Forbidden Practices / etc. mockup) --
-  //   that's its own task, not built yet.
+  //   (Naming Conventions / Forbidden Practices / etc. mockup) -- that's
+  //   its own task, not built yet.
   const navItems = [
-    { label: 'Overview', icon: <BookIcon />, active: false, disabled: true, onClick: undefined },
-    { label: 'Students', icon: <UserIcon />, active: true, disabled: false, onClick: undefined },
+    { label: 'Overview', icon: <BookIcon />, active: view === 'overview', disabled: false, onClick: () => { setView('overview'); closeSidebar(); } },
+    { label: 'Students', icon: <UserIcon />, active: view === 'students', disabled: false, onClick: () => { setView('students'); closeSidebar(); } },
     { label: 'Exercises', icon: <CapIcon />, active: false, disabled: true, onClick: undefined },
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
@@ -155,6 +181,8 @@ function InstructorCourseOverview() {
 
   return (
     <div style={styles.page}>
+      <style>{inviteCSS}</style>
+
       <Sidebar
         subtitle={course.title}
         navItems={navItems}
@@ -180,84 +208,154 @@ function InstructorCourseOverview() {
           </div>
         </header>
 
-        {/* Invite Students */}
-        <section style={styles.card}>
-          <h2 style={styles.cardTitle}>Invite Students</h2>
-          <p style={styles.cardSubtitle}>
-            Invite students to <strong>{course.title}</strong> by email, or share a link they can use to join.
-          </p>
+        {/* ============================================================ */}
+        {/* OVERVIEW VIEW                                                */}
+        {/* ============================================================ */}
+        {view === 'overview' && details && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+            <section style={styles.card}>
+              <h2 style={styles.cardTitle}>Course Description</h2>
+              <p style={styles.descriptionText}>{details.description}</p>
+            </section>
 
-          <div style={styles.inviteGrid}>
-            {/* Shareable link */}
-            <div style={styles.inviteColumn}>
-              <div style={styles.inviteColumnLabel}>Share a join link</div>
-              <button type="button" onClick={handleGenerateLink} style={styles.secondaryButton}>
-                Generate Invite Link
-              </button>
-              {shareableLink && (
-                <div style={styles.linkRow}>
-                  <input type="text" readOnly value={shareableLink} style={styles.linkInput} />
-                  <button type="button" onClick={handleCopyLink} style={styles.copyButton}>
-                    {linkCopied ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
-              )}
-            </div>
+            <section style={styles.card}>
+              <h2 style={styles.cardTitle}>Notions to Acquire</h2>
+              <ul style={styles.list}>
+                {details.notions.map((item, idx) => (
+                  <li key={idx} style={styles.listItem}>{item}</li>
+                ))}
+              </ul>
+            </section>
 
-            {/* Email invite */}
-            <div style={styles.inviteColumn}>
-              <div style={styles.inviteColumnLabel}>Send a direct invitation</div>
-              <form onSubmit={handleSendEmailInvite} style={styles.emailForm}>
-                <div style={styles.emailInputWrap}>
-                  <span style={styles.emailInputIcon}><MailIcon /></span>
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => { setEmailInput(e.target.value); setEmailError(''); }}
-                    placeholder="student@example.com"
-                    style={styles.emailInput}
-                  />
+            <section style={styles.card}>
+              <h2 style={styles.cardTitle}>General Rules</h2>
+              <ul style={styles.list}>
+                {details.rules.map((item, idx) => (
+                  <li key={idx} style={styles.listItem}>{item}</li>
+                ))}
+              </ul>
+            </section>
+
+            <section style={styles.card}>
+              <h2 style={styles.cardTitle}>Tips to Succeed</h2>
+              <ul style={styles.list}>
+                {details.tips.map((item, idx) => (
+                  <li key={idx} style={styles.listItem}>{item}</li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* STUDENTS VIEW                                                */}
+        {/* ============================================================ */}
+        {view === 'students' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+            {/* Invite Students -- modern aligned rows */}
+            <section style={styles.card}>
+              <h2 style={styles.cardTitle}>Invite Students</h2>
+              <p style={styles.cardSubtitle}>
+                Invite students to <strong>{course.title}</strong> by email, or share a link they can use to join.
+              </p>
+
+              <div style={styles.inviteRowsWrap}>
+                {/* Row 1: shareable link */}
+                <div style={styles.inviteRow}>
+                  <span style={styles.inviteRowLabel}>Shareable link</span>
+                  <div style={styles.inviteRowControl}>
+                    <input
+                      type="text"
+                      readOnly
+                      value={shareableLink || 'Click Generate to create a link'}
+                      style={styles.pillInputReadOnly}
+                    />
+                    {shareableLink ? (
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className="invitePillButton"
+                        style={styles.pillButtonSecondary}
+                      >
+                        {linkCopied ? 'Copied!' : 'Copy'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleGenerateLink}
+                        className="invitePillButton"
+                        style={styles.pillButtonPrimary}
+                      >
+                        Generate
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <button type="submit" disabled={sendingEmail} style={styles.primaryButton}>
-                  {sendingEmail ? 'Sending...' : 'Send Invitation'}
-                </button>
-              </form>
+
+                {/* Row 2: email invite -- same height/shape as row 1 */}
+                <form onSubmit={handleSendEmailInvite} style={styles.inviteRow}>
+                  <span style={styles.inviteRowLabel}>Invite by email</span>
+                  <div style={styles.inviteRowControl}>
+                    <input
+                      type="email"
+                      className="inviteInput"
+                      value={emailInput}
+                      onChange={(e) => { setEmailInput(e.target.value); setEmailError(''); }}
+                      placeholder="student@example.com"
+                      style={styles.pillInput}
+                    />
+                    <button
+                      type="submit"
+                      disabled={sendingEmail}
+                      className="invitePillButton"
+                      style={styles.pillButtonPrimary}
+                    >
+                      {sendingEmail ? 'Sending...' : 'Send'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
               {emailError && <p style={styles.errorText}>{emailError}</p>}
               {confirmationMessage && <p style={styles.successText}>{confirmationMessage}</p>}
-            </div>
-          </div>
-        </section>
+            </section>
 
-        {/* Invitations list */}
-        <section style={styles.card}>
-          <h2 style={styles.cardTitle}>Invitations</h2>
-          {invitations.length === 0 ? (
-            <p style={styles.emptyText}>No invitations sent yet for this course.</p>
-          ) : (
-            <div style={styles.table}>
-              <div style={styles.tableHeaderRow}>
-                <span style={{ ...styles.tableCell, flex: 2 }}>Student</span>
-                <span style={{ ...styles.tableCell, flex: 1 }}>Status</span>
-                <span style={{ ...styles.tableCell, flex: 1.2 }}>Sent</span>
-              </div>
-              {invitations.map((inv) => (
-                <div key={inv.id} style={styles.tableRow}>
-                  <span style={{ ...styles.tableCell, flex: 2 }}>
-                    {inv.email || <span style={{ color: '#999', fontStyle: 'italic' }}>Shareable link</span>}
-                  </span>
-                  <span style={{ ...styles.tableCell, flex: 1 }}>
-                    <span style={inv.status === 'accepted' ? styles.badgeAccepted : (inv.status === 'declined' ? styles.badgeDeclined : styles.badgePending)}>
-                      {inv.status}
-                    </span>
-                  </span>
-                  <span style={{ ...styles.tableCell, flex: 1.2, color: '#888', fontSize: '0.8rem' }}>
-                    {new Date(inv.createdAt).toLocaleDateString()}
-                  </span>
+            {/* Invitations list */}
+            <section style={styles.card}>
+              <h2 style={styles.cardTitle}>Invitations</h2>
+              {invitations.length === 0 ? (
+                <p style={styles.emptyText}>No invitations sent yet for this course.</p>
+              ) : (
+                <div style={styles.table}>
+                  <div style={styles.tableHeaderRow}>
+                    <span style={{ ...styles.tableCell, flex: 2 }}>Student</span>
+                    <span style={{ ...styles.tableCell, flex: 1 }}>Status</span>
+                    <span style={{ ...styles.tableCell, flex: 1.2 }}>Sent</span>
+                  </div>
+                  {invitations.map((inv) => (
+                    <div key={inv.id} style={styles.tableRow}>
+                      <span style={{ ...styles.tableCell, flex: 2 }}>
+                        {inv.email ? (
+                          inv.email
+                        ) : (
+                          <span style={{ color: '#999', fontStyle: 'italic' }}>Awaiting student access</span>
+                        )}
+                      </span>
+                      <span style={{ ...styles.tableCell, flex: 1 }}>
+                        <span style={inv.status === 'accepted' ? styles.badgeAccepted : (inv.status === 'declined' ? styles.badgeDeclined : styles.badgePending)}>
+                          {inv.status}
+                        </span>
+                      </span>
+                      <span style={{ ...styles.tableCell, flex: 1.2, color: '#888', fontSize: '0.8rem' }}>
+                        {new Date(inv.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
+              )}
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -283,36 +381,44 @@ const styles = {
   },
   cardTitle: { margin: 0, fontSize: '1.1rem', color: '#1a1a1a' },
   cardSubtitle: { fontSize: '0.85rem', color: '#666', margin: '0.4rem 0 1.2rem', lineHeight: 1.4 },
-  inviteGrid: { display: 'flex', gap: '1.5rem', flexWrap: 'wrap' },
-  inviteColumn: { flex: 1, minWidth: '260px', display: 'flex', flexDirection: 'column', gap: '0.6rem' },
-  inviteColumnLabel: { fontSize: '0.78rem', fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.03em' },
-  secondaryButton: {
-    alignSelf: 'flex-start', padding: '0.6rem 1.1rem', borderRadius: '9px', border: `1px solid ${NAVY}`,
-    backgroundColor: '#fff', color: NAVY, fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
+  descriptionText: { fontSize: '0.9rem', color: '#444', lineHeight: 1.6, margin: '0.6rem 0 0' },
+  list: { margin: '0.6rem 0 0', paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' },
+  listItem: { fontSize: '0.88rem', color: '#444', lineHeight: 1.5 },
+
+  // --- Modern aligned invite rows (Classroom/Moodle-style pills) ---
+  inviteRowsWrap: { display: 'flex', flexDirection: 'column', gap: '0.9rem', marginTop: '0.4rem' },
+  inviteRow: {
+    display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
+    padding: '0.9rem 1.1rem', borderRadius: '14px', backgroundColor: '#f7f8fc', border: '1px solid #edeff6',
   },
-  linkRow: { display: 'flex', gap: '0.5rem' },
-  linkInput: {
-    flex: 1, padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #d7dce8',
-    fontSize: '0.8rem', color: '#555', backgroundColor: '#f9fafc',
+  inviteRowLabel: {
+    fontSize: '0.78rem', fontWeight: 700, color: '#555', textTransform: 'uppercase',
+    letterSpacing: '0.03em', width: '130px', flexShrink: 0,
   },
-  copyButton: {
-    padding: '0.55rem 0.9rem', borderRadius: '8px', border: 'none', backgroundColor: NAVY,
-    color: '#fff', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+  inviteRowControl: { display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: '260px' },
+  pillInput: {
+    flex: 1, height: '44px', padding: '0 1rem', borderRadius: '999px',
+    border: '1px solid #d7dce8', fontSize: '0.88rem', color: '#1a1a1a',
+    backgroundColor: '#fff', outline: 'none', boxSizing: 'border-box',
+    transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
   },
-  emailForm: { display: 'flex', gap: '0.5rem' },
-  emailInputWrap: { position: 'relative', display: 'flex', alignItems: 'center', flex: 1 },
-  emailInputIcon: { position: 'absolute', left: '0.7rem', color: '#888', display: 'flex' },
-  emailInput: {
-    width: '100%', height: '40px', padding: '0 0.7rem 0 2.3rem', borderRadius: '8px',
-    border: '1px solid #d7dce8', fontSize: '0.85rem', boxSizing: 'border-box', outline: 'none',
+  pillInputReadOnly: {
+    flex: 1, height: '44px', padding: '0 1rem', borderRadius: '999px',
+    border: '1px solid #e2e5ee', fontSize: '0.85rem', color: '#555',
+    backgroundColor: '#fff', outline: 'none', boxSizing: 'border-box',
   },
-  primaryButton: {
-    padding: '0 1.1rem', height: '40px', backgroundImage: `linear-gradient(135deg, ${NAVY}, ${NAVY_DARK})`,
-    color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 600,
+  pillButtonPrimary: {
+    height: '44px', padding: '0 1.4rem', borderRadius: '999px', border: 'none',
+    backgroundImage: `linear-gradient(135deg, ${NAVY}, ${NAVY_DARK})`,
+    color: '#fff', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+  },
+  pillButtonSecondary: {
+    height: '44px', padding: '0 1.4rem', borderRadius: '999px', border: `1.5px solid ${NAVY}`,
+    backgroundColor: '#fff', color: NAVY, fontSize: '0.85rem', fontWeight: 700,
     cursor: 'pointer', whiteSpace: 'nowrap',
   },
-  errorText: { color: '#c00', fontSize: '0.8rem', margin: 0 },
-  successText: { color: '#0a7c2f', fontSize: '0.8rem', margin: 0 },
+  errorText: { color: '#c00', fontSize: '0.8rem', margin: '0.8rem 0 0' },
+  successText: { color: '#0a7c2f', fontSize: '0.8rem', margin: '0.8rem 0 0' },
   emptyText: { color: '#888', fontSize: '0.85rem' },
   table: { display: 'flex', flexDirection: 'column' },
   tableHeaderRow: {
