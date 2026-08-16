@@ -10,7 +10,8 @@ import {
 import {
   getCourseInfo, getCourseDetails, getInvitationsForCourse,
   sendInvitationByEmail, generateShareableLink,
-} from './mockEnrollments';
+} from './Mockenrollments';
+
 
 // NOTE (flagged deliberately): falls back to 'c1' only if no courseId was
 // passed via navigation state -- e.g. someone lands here directly by URL

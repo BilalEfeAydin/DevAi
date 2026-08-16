@@ -6,7 +6,7 @@ import { CapIcon, BookIcon } from './Icons';
 import {
   getInvitationByToken, acceptInvitation, declineInvitation,
   attachEmailToInvitation,
-} from './mockEnrollments';
+} from './Mockenrollments';
 
 function AcceptInvitation() {
   const [searchParams] = useSearchParams();

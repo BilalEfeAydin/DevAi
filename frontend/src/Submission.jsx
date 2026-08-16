@@ -28,6 +28,7 @@ function Submission() {
 
   const {
     courseId, courseTitle,
+    exerciseId,
     exerciseTitle = 'Exercise',
     exerciseDescription = 'No description available for this exercise yet.',
     exerciseBadge = 'General',
@@ -79,6 +80,7 @@ function Submission() {
   // like it's showing a past attempt.
   const displayedFiles = isViewingPast ? viewingSnapshot.files : files;
   const displayedFeedback = isViewingPast ? viewingSnapshot.feedback : aiFeedback;
+  const displayedReview = isViewingPast ? viewingSnapshot.feedback : aiReview;
   const activeFile = displayedFiles.find((f) => f.id === activeFileId) || displayedFiles[0];
 
   useEffect(() => {
@@ -95,6 +97,59 @@ function Submission() {
     }
     loadProfile();
   }, []);
+
+  // Fetch past submissions on mount to restore attempt count, AI review, and history
+  useEffect(() => {
+    async function loadPastSubmissions() {
+      try {
+        const session = await fetchAuthSession();
+        const token = session.tokens?.idToken?.toString();
+        const studentId = session.tokens?.idToken?.payload?.sub;
+        if (!studentId) return;
+
+        const res = await fetch(
+          `${API_BASE_URL}/submissions?studentId=${studentId}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        if (!res.ok) return;
+
+        const items = await res.json();
+
+        // Filter to only this course's submissions and sort newest first
+        const cid = courseId || 'test-course';
+        const eid = exerciseId || 'default';
+        const courseSubmissions = items
+          .filter((item) => item.CourseID === cid && item.AssignmentID === eid)
+          .sort((a, b) => (b.CreatedAt || '').localeCompare(a.CreatedAt || ''));
+
+        if (courseSubmissions.length === 0) return;
+
+        // Restore attempt count
+        setAttemptsUsed(courseSubmissions.length);
+
+        // Restore the most recent AI review
+        const latestWithReview = courseSubmissions.find((s) => s.aiReview);
+        if (latestWithReview?.aiReview) {
+          setAiReview(latestWithReview.aiReview);
+        }
+
+        // Rebuild attempt history (oldest first for display)
+        const history = courseSubmissions
+          .slice()
+          .reverse()
+          .map((s, idx) => ({
+            attemptNumber: idx + 1,
+            files: [{ id: 'main', name: 'main.py', content: s.content || '' }],
+            feedback: s.aiReview || null,
+            timestamp: s.CreatedAt,
+          }));
+        setAttemptHistory(history);
+      } catch (err) {
+        console.warn('Could not load past submissions:', err);
+      }
+    }
+    loadPastSubmissions();
+  }, [courseId, exerciseId]);
 
   const getInitials = () => {
     const first = firstName.charAt(0).toUpperCase();
@@ -125,13 +180,13 @@ function Submission() {
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
 
-  const handleRunTests = async () => {
+  const handleRunTests = async (submitForReview = false) => {
     // Collect all file contents into a single string (main file first)
     const mainFile = files.find((f) => f.id === 'main') || files[0];
     const code = mainFile.content;
 
     setOutput({ status: 'running', message: 'Running your code...' });
-    setAiReview(null);
+    if (!submitForReview) setAiReview(null); // only clear review on plain Run Tests
 
     try {
       const session = await fetchAuthSession();
@@ -145,8 +200,10 @@ function Submission() {
         },
         body: JSON.stringify({
           courseId: courseId || 'test-course',
+          assignmentId: exerciseId || 'default',
           studentId: session.tokens?.idToken?.payload?.sub || 'unknown',
           content: code,
+          submitForReview,
         }),
       });
 
@@ -179,9 +236,7 @@ function Submission() {
   const handleRunSubmit = async () => {
     if (attemptsUsed >= maxAttempts) return;
     setAttemptsUsed((prev) => prev + 1);
-    // For now, Run & Submit does the same as Run Tests.
-    // Once Bedrock is integrated, this will also return AI review feedback.
-    await handleRunTests();
+    await handleRunTests(true);
   };
 
   const handleCodeChange = (value) => {
@@ -389,8 +444,8 @@ function Submission() {
                       <div style={{ marginTop: '0.5rem' }}>
                         <div style={{ fontSize: '0.72rem', color: '#6b7086', marginBottom: '0.3rem', fontWeight: 600 }}>error</div>
                         <pre style={{ ...styles.outputText, color: '#e07a7a', margin: 0, whiteSpace: 'pre-wrap' }}>
-{output.error.name}: {output.error.value}
-{output.error.traceback}
+                          {output.error.name}: {output.error.value}
+                          {output.error.traceback}
                         </pre>
                       </div>
                     )}
@@ -409,7 +464,7 @@ function Submission() {
                 </button>
               ) : (
                 <>
-                  <button type="button" onClick={handleRunTests} style={styles.runTestsButton}>
+                  <button type="button" onClick={() => handleRunTests(false)} style={styles.runTestsButton}>
                     Run Tests
                   </button>
                   {attemptsUsed < maxAttempts ? (
@@ -437,18 +492,63 @@ function Submission() {
 
             <div style={styles.inquiryCard}>
               <h3 style={styles.inquiryCardTitle}>Socratic Inquiry</h3>
-              {!aiReview ? (
+              {!displayedReview ? (
                 <p style={styles.inquiryCardText}>
-                  Your AI reviewer's guiding questions will appear here once you submit your first attempt.
+                  Your AI reviewer's guiding questions will appear here once you submit your attempt.
                 </p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                   <div style={{ fontSize: '0.85rem', color: '#333' }}>
-                    <strong>{aiReview.status === 'PASS' ? '✅ Pass' : '🔍 Review Needed'}:</strong> {aiReview.summary}
+                    <strong>{displayedReview.status === 'PASS' ? '✅ Pass' : '🔍 Review Needed'}:</strong> {displayedReview.summary}
                   </div>
-                  {aiReview.feedback && aiReview.feedback.length > 0 && (
+                  {displayedReview.resolvedIssues && displayedReview.resolvedIssues.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.4rem' }}>
-                      {aiReview.feedback.map((fb, idx) => (
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#16a34a' }}>✅ Resolved Issues</div>
+                      {displayedReview.resolvedIssues.map((fb, idx) => (
+                        <div key={idx} style={{
+                          backgroundColor: '#f0fdf4',
+                          borderLeft: `3px solid #22c55e`,
+                          padding: '0.6rem 0.8rem',
+                          borderRadius: '4px'
+                        }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#16a34a', marginBottom: '0.2rem' }}>
+                            Line {fb.line}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#1a1a1a', lineHeight: 1.4 }}>
+                            {fb.resolution}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {displayedReview.persistingIssues && displayedReview.persistingIssues.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.4rem' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#ea580c' }}>⚠️ Persisting Issues</div>
+                      {displayedReview.persistingIssues.map((fb, idx) => (
+                        <div key={idx} style={{
+                          backgroundColor: '#fff7ed',
+                          borderLeft: `3px solid #f97316`,
+                          padding: '0.6rem 0.8rem',
+                          borderRadius: '4px'
+                        }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ea580c', marginBottom: '0.2rem' }}>
+                            Line {fb.line}
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#1a1a1a', lineHeight: 1.4 }}>
+                            {fb.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {displayedReview.feedback && displayedReview.feedback.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.4rem' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0284c7' }}>
+                        {(displayedReview.resolvedIssues?.length > 0 || displayedReview.persistingIssues?.length > 0) ? '🆕 New Issues' : 'Issues'}
+                      </div>
+                      {displayedReview.feedback.map((fb, idx) => (
                         <div key={idx} style={{
                           backgroundColor: fb.type === 'violation' ? '#fff1f2' : (fb.type === 'concern' ? '#fffbeb' : '#f0f9ff'),
                           borderLeft: `3px solid ${fb.type === 'violation' ? '#f43f5e' : (fb.type === 'concern' ? '#fbbf24' : '#38bdf8')}`,
@@ -463,11 +563,6 @@ function Submission() {
                           </div>
                         </div>
                       ))}
-                    </div>
-                  )}
-                  {aiReview.generalSuggestion && (
-                    <div style={{ fontSize: '0.85rem', color: '#555', fontStyle: 'italic', marginTop: '0.4rem' }}>
-                      💡 {aiReview.generalSuggestion}
                     </div>
                   )}
                 </div>
