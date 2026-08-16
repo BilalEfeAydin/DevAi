@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { fetchAuthSession } from 'aws-amplify/auth';
 import { NAVY, NAVY_DARK } from './Theme';
 import { BookIcon, ArrowIcon, CapIcon } from './Icons';
-import { getAllEnrollments } from './Mockenrollments';
+
+const API_BASE_URL = 'https://lfass4s0ll.execute-api.us-east-1.amazonaws.com';
 
 const hoverCSS = `
   .courseCard {
@@ -22,7 +24,41 @@ const hoverCSS = `
 function CoursePicker() {
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState(null);
-  const courses = getAllEnrollments(); // NEW: reads from the shared mock store
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadCourses() {
+      try {
+        const session = await fetchAuthSession();
+        const token = session.tokens?.idToken?.toString();
+        const studentId = session.tokens?.idToken?.payload?.sub;
+        if (!studentId) return;
+
+        const res = await fetch(
+          `${API_BASE_URL}/courses?studentId=${studentId}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        if (!res.ok) return;
+
+        const items = await res.json();
+        // Map DynamoDB items to the shape the UI expects
+        const mapped = items.map((item) => ({
+          id: item.CourseID,
+          title: item.Title || item.CourseID,
+          instructor: item.InstructorName || 'Instructor',
+          color: item.Color || '#1e2a78',
+          status: 'accepted',
+        }));
+        setCourses(mapped);
+      } catch (err) {
+        console.warn('Could not load courses:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadCourses();
+  }, []);
 
   const selectedCourse = courses.find((c) => c.id === selectedId) || null;
 

@@ -34,6 +34,7 @@ public class ApiConstruct extends Construct {
     private final CfnApi httpApi;
     private final Function getSubmissionFn;
     private final Function postSubmissionFn;
+    private final Function getCoursesFn;
     private final Function orchestratorFn;
 
     public ApiConstruct(final Construct scope, final String id, final Table submissionsTable, final Table coursesTable, final Bucket honorCodeBucket) {
@@ -79,6 +80,16 @@ public class ApiConstruct extends Construct {
                 .timeout(Duration.seconds(10))
                 .build();
 
+        // GET /courses — reads courses from DynamoDB (by student enrollment or instructor ownership)
+        this.getCoursesFn = Function.Builder.create(this, "GetCoursesFn")
+                .functionName("DevAi-GetCourses")
+                .runtime(Runtime.NODEJS_24_X)
+                .handler("index.handler")
+                .code(Code.fromAsset("src/main/java/controllers/getCourses"))
+                .timeout(Duration.seconds(10))
+                .environment(Map.of("TABLE_NAME", coursesTable.getTableName()))
+                .build();
+
         // =============================================
         // 2. IAM PERMISSIONS
         // =============================================
@@ -89,6 +100,9 @@ public class ApiConstruct extends Construct {
         // Grant postSubmission permission to read from Courses table and Honor Code bucket
         coursesTable.grantReadData(this.postSubmissionFn);
         honorCodeBucket.grantRead(this.postSubmissionFn);
+
+        // Grant getCourses permission to read from Courses table
+        coursesTable.grantReadData(this.getCoursesFn);
 
         // Grant postSubmission permission to invoke Bedrock models (for AI code review)
         // NOTE: The "us." model ID prefix enables cross-region inference, meaning
@@ -163,6 +177,13 @@ public class ApiConstruct extends Construct {
                 .payloadFormatVersion("2.0")
                 .build();
 
+        CfnIntegration getCoursesIntegration = CfnIntegration.Builder.create(this, "GetCoursesIntegration")
+                .apiId(this.httpApi.getRef())
+                .integrationType("AWS_PROXY")
+                .integrationUri(this.getCoursesFn.getFunctionArn())
+                .payloadFormatVersion("2.0")
+                .build();
+
         // =============================================
         // 6. ROUTES
         // =============================================
@@ -190,6 +211,14 @@ public class ApiConstruct extends Construct {
                 .authorizerId(authorizerId)
                 .build();
 
+        CfnRoute.Builder.create(this, "GetCoursesRoute")
+                .apiId(this.httpApi.getRef())
+                .routeKey("GET /courses")
+                .target("integrations/" + getCoursesIntegration.getRef())
+                .authorizationType("JWT")
+                .authorizerId(authorizerId)
+                .build();
+
         // =============================================
         // 7. LAMBDA INVOKE PERMISSIONS (allow API Gateway to call the Lambdas)
         // =============================================
@@ -210,6 +239,14 @@ public class ApiConstruct extends Construct {
                 .build());
 
         this.orchestratorFn.addPermission("ApiGwInvoke", software.amazon.awscdk.services.lambda.Permission.builder()
+                .principal(new software.amazon.awscdk.services.iam.ServicePrincipal("apigateway.amazonaws.com"))
+                .sourceArn("arn:aws:execute-api:"
+                        + software.amazon.awscdk.Stack.of(this).getRegion() + ":"
+                        + software.amazon.awscdk.Stack.of(this).getAccount() + ":"
+                        + this.httpApi.getRef() + "/*/*")
+                .build());
+
+        this.getCoursesFn.addPermission("ApiGwInvoke", software.amazon.awscdk.services.lambda.Permission.builder()
                 .principal(new software.amazon.awscdk.services.iam.ServicePrincipal("apigateway.amazonaws.com"))
                 .sourceArn("arn:aws:execute-api:"
                         + software.amazon.awscdk.Stack.of(this).getRegion() + ":"

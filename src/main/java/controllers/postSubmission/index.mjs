@@ -292,10 +292,46 @@ ${JSON.stringify(previousReview, null, 2)}
 export const handler = async (event) => {
   try {
     const body = typeof event.body === "string" ? JSON.parse(event.body) : (event.body || {});
-    const { courseId, studentId, content, submitForReview, assignmentId } = body;
+    const { courseId, content, submitForReview, assignmentId } = body;
+
+    // ── 0. Extract caller identity from JWT ──────────────────
+    const claims = event.requestContext?.authorizer?.jwt?.claims || {};
+    const callerSub = claims.sub;
+    const callerGroups = claims["cognito:groups"] || "";
+
+    // Role check: instructors cannot submit code
+    if (callerGroups.includes("instructor")) {
+      return respond(403, { message: "Instructors cannot submit code." });
+    }
+
+    // Identity enforcement: always use the JWT sub as studentId
+    const studentId = callerSub || body.studentId;
 
     if (!courseId || !studentId || !content) {
       return respond(400, { message: "courseId, studentId and content are required" });
+    }
+
+    // Enrollment check: verify the student is enrolled in this course
+    if (submitForReview) {
+      try {
+        const courseRes = await ddb.send(new GetCommand({
+          TableName: COURSES_TABLE,
+          Key: { CourseID: courseId },
+        }));
+
+        const course = courseRes.Item;
+        if (course && course.EnrolledStudents) {
+          const enrolled = Array.isArray(course.EnrolledStudents)
+            ? course.EnrolledStudents
+            : [];
+          if (!enrolled.includes(studentId)) {
+            return respond(403, { message: "You are not enrolled in this course." });
+          }
+        }
+        // If course doesn't exist or has no EnrolledStudents, allow (backwards compat)
+      } catch (enrollErr) {
+        console.warn("Enrollment check failed, allowing submission:", enrollErr.message);
+      }
     }
 
     // ── 1. Save submission to DynamoDB (only on formal submit) ──
