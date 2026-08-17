@@ -8,7 +8,7 @@ import {
   HelpIcon, MenuIcon, SettingsIcon, ArrowIcon, FolderIcon
 } from './Icons';
 import { getCourseDetails } from './Mockenrollments';
-import { getResourcesForCourse } from './mockResources';
+import { getResourcesForCourse } from './Mockresources';
 
 // Mock exercises (unchanged)
 const exercisesByCourse = {

@@ -13,7 +13,7 @@ import {
 } from './Mockenrollments';
 import {
   getResourcesForCourse, addResource, deleteResource,
-} from './mockResources';
+} from './Mockresources';
 
 
 // NOTE (flagged deliberately): falls back to 'c1' only if no courseId was

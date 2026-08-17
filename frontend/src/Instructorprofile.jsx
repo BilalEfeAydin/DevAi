@@ -8,25 +8,7 @@ import {
   HelpIcon, MailIcon, ChartIcon,
   MenuIcon, SettingsIcon, PlusIcon,
 } from './Icons';
-import { getCourseInfo } from './Mockenrollments'; // but we need to get all courses for instructor
-// We need a function to get all courses (not just enrollments)
-// We'll add a new export: getAllCourses()
-// For simplicity, we can use getAllEnrollments() but that includes student status.
-// Let's add getAllCourses() to mockEnrollments.
-
-// --- we'll extend mockEnrollments with getAllCourses() ---
-// In the meantime, we'll import the internal courses object? Not ideal.
-// We'll add a new function in mockEnrollments: getAllCourses()
-
-// Let's assume we've added:
-// export function getAllCourses() { return Object.values(courses); }
-
-// For now, we'll use a local mock and update it after registration.
-
-// We'll modify to use the mock store.
-
-// But we need to import the function:
-import { getAllCourses, registerCourse } from './Mockenrollments'; // we'll add getAllCourses in mockEnrollments
+import { getCourseInfo, getAllCourses, registerCourse } from './Mockenrollments';
 
 const hoverCSS = `
   .courseRow {
