@@ -1,17 +1,5 @@
 // mockEnrollments.js
-// NOTE (flagged deliberately): tiny in-memory mock "database" so
-// CoursePicker.jsx, AcceptInvitation.jsx and InstructorCourseOverview.jsx
-// stay in sync during local testing, since there's no real Enrollment API
-// yet (Trello: "Build Enrollment API" — not started). Replace with real
-// fetch/PATCH calls (GET/POST/PATCH /courses/:id/invitations) once that
-// backend exists. Resets on every page refresh (module-level state, not
-// persisted).
-//
-// SIMPLIFICATION (flagged deliberately): studentCourseStatus tracks ONE
-// global status per course ("does the current test student have access"),
-// not a per-student status. That's enough for testing the Accept/Decline
-// flow with a single logged-in student, but the real Enrollment API will
-// need per-(student, course) status, not per-course.
+// NOTE: in-memory mock "database" – resets on refresh.
 
 const courses = {
   c1: { id: 'c1', title: 'Introduction to Python', instructor: 'Prof. Amrani', color: '#1e2a78' },
@@ -19,14 +7,7 @@ const courses = {
   c3: { id: 'c3', title: 'Web Development Basics', instructor: 'Prof. Khelifi', color: '#0e9f6e' },
 };
 
-// NOTE (flagged deliberately): informational course-level content for the
-// instructor "Overview" tab (description, notions to learn, general
-// rules, tips). This is DIFFERENT from the Rule Configuration mockup
-// (Naming Conventions / Forbidden Practices / etc.) -- that config is
-// per-exercise and gets injected into the Bedrock prompt. This content
-// here is just informational text shown to students, not sent to the AI.
-// Replace with a real fetch (e.g. GET /courses/:id) once the Courses API
-// exists.
+// Informational content for existing courses
 const courseDetails = {
   c1: {
     description: 'An introductory course covering Python fundamentals through hands-on, AI-reviewed exercises. No prior programming experience required.',
@@ -48,16 +29,14 @@ const courseDetails = {
   },
 };
 
-// Student-side: does the test student have access to each course?
+// Student-side access status (used by CoursePicker)
 const studentCourseStatus = {
   c1: 'accepted',
   c2: 'accepted',
   c3: 'pending',
 };
 
-// Teacher-side: one record per invited email, or per generated shareable
-// link (email: null until a student actually opens it while logged in --
-// see attachEmailToInvitation below).
+// Teacher-side invitations store
 let invitations = [
   {
     id: 'inv-1',
@@ -70,13 +49,118 @@ let invitations = [
 ];
 
 let invitationCounter = invitations.length;
+let courseCounter = 3; // start after c3
 
 function generateToken() {
   return `tok-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 // ============================================================
-// STUDENT-FACING (used by CoursePicker.jsx / AcceptInvitation.jsx)
+// COURSE REGISTRATION (Instructor)
+// ============================================================
+
+export function registerCourse(data) {
+  const { title, description, instructorName, rules, honorCodeText } = data;
+  // generate new course id
+  const id = `c${++courseCounter}`;
+  const color = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
+  const newCourse = {
+    id,
+    title,
+    instructor: instructorName || 'Instructor',
+    color,
+    rules, // store the full rule config
+    // NOTE (flagged deliberately): mock only. Real HonorCodeDocURI (see
+    // DatabaseConstruct.java) is meant to hold an S3 URI, NOT raw text --
+    // DynamoDB items are capped at 400KB, and a syllabus/honor-code doc can
+    // exceed that as the course grows. The real flow: frontend uploads the
+    // raw file to honorCodeBucket (already provisioned in
+    // StorageConstruct.java, CORS-enabled for PUT) via a presigned URL, and
+    // ONLY the resulting S3 URI gets written to HonorCodeDocURI. That
+    // Lambda route (POST /courses/:id/honor-code-upload-url) doesn't exist
+    // yet -- ApiConstruct.java has zero routes for it. Storing the text
+    // here directly is a stopgap so the UI/UX is complete and testable.
+    honorCodeText: honorCodeText || null,
+  };
+  courses[id] = newCourse;
+
+  // Also store courseDetails for the Overview tab
+  courseDetails[id] = {
+    description: description || 'No description provided.',
+    notions: generateNotionsFromRules(rules),
+    rules: generateRulesFromRules(rules),
+    tips: ['Follow the course guidelines.', 'Read the Socratic questions carefully.', 'Review your past attempts.'],
+  };
+
+  // default student access: pending until they accept
+  studentCourseStatus[id] = 'pending';
+
+  return newCourse;
+}
+
+// NOTE (flagged deliberately): generateNotionsFromRules / generateRulesFromRules
+// below produce DISPLAY-ONLY text for the Overview tab. None of this --
+// neither the structured `rules` object nor `honorCodeText` -- reaches
+// Bedrock. The AI review pipeline (postSubmission Lambda, see
+// ApiConstruct.java) still uses a hardcoded honor code string. Frontend has
+// nothing further to do here: it already sends `courseId` on every
+// submission (see Submission.jsx handleRunTests). Wiring this for real is a
+// BACKEND task: postSubmission must fetch Courses.HonorCodeDocURI (+ rules,
+// once a storage decision is made for those) by courseId and inject them
+// into the Bedrock prompt, replacing the hardcoded string.
+
+// Helper functions to convert rule config into display-friendly items
+function generateNotionsFromRules(rules) {
+  const notions = [];
+  if (rules.naming.camelCase || rules.naming.PascalCase || rules.naming.UPPER_CASE || rules.naming.custom.length) {
+    notions.push('Understanding naming conventions');
+  }
+  if (rules.structure.functionLengthLimit) {
+    notions.push('Writing concise functions');
+  }
+  if (rules.structure.maxNestingLevels) {
+    notions.push('Controlling nesting depth');
+  }
+  if (rules.complexity.cyclomaticLimit) {
+    notions.push('Managing cyclomatic complexity');
+  }
+  if (rules.required.docstrings) {
+    notions.push('Writing docstrings for public methods');
+  }
+  if (rules.required.unitTests) {
+    notions.push('Writing unit tests');
+  }
+  if (notions.length === 0) notions.push('General programming principles');
+  return notions;
+}
+
+function generateRulesFromRules(rules) {
+  const ruleTexts = [];
+  if (rules.naming.camelCase) ruleTexts.push('Use camelCase for variables.');
+  if (rules.naming.PascalCase) ruleTexts.push('Use PascalCase for classes.');
+  if (rules.naming.UPPER_CASE) ruleTexts.push('Use UPPER_CASE for constants.');
+  rules.naming.custom.forEach(r => ruleTexts.push(`Custom naming: ${r}`));
+  if (rules.structure.functionLengthLimit) {
+    ruleTexts.push(`Functions must not exceed ${rules.structure.functionLengthLimit} lines.`);
+  }
+  if (rules.structure.maxNestingLevels) {
+    ruleTexts.push(`Nesting levels must not exceed ${rules.structure.maxNestingLevels}.`);
+  }
+  if (rules.complexity.cyclomaticLimit) {
+    ruleTexts.push(`Cyclomatic complexity should not exceed ${rules.complexity.cyclomaticLimit}.`);
+  }
+  if (rules.forbidden.globalVariables) ruleTexts.push('Global variables are forbidden.');
+  if (rules.forbidden.hardcodedSecrets) ruleTexts.push('Hardcoded secrets are forbidden.');
+  rules.forbidden.custom.forEach(r => ruleTexts.push(`Forbidden: ${r}`));
+  if (rules.required.docstrings) ruleTexts.push('All public methods must have docstrings.');
+  if (rules.required.unitTests) ruleTexts.push('Core logic must have unit tests.');
+  rules.required.custom.forEach(r => ruleTexts.push(`Required: ${r}`));
+  if (ruleTexts.length === 0) ruleTexts.push('Follow standard coding practices.');
+  return ruleTexts;
+}
+
+// ============================================================
+// STUDENT-FACING
 // ============================================================
 
 export function getAllEnrollments() {
@@ -96,7 +180,7 @@ export function getInvitationByToken(token) {
     courseTitle: course.title,
     instructorName: course.instructor,
     status: studentCourseStatus[invite.courseId] || 'pending',
-    email: invite.email, // null if this is still a generic, unused shareable link
+    email: invite.email,
   };
 }
 
@@ -116,10 +200,6 @@ export function declineInvitation(token) {
   return courses[invite.courseId];
 }
 
-// NEW: called once a student opens a generic shareable link WHILE logged
-// in, so the instructor sees the real email instead of a placeholder.
-// Only fills it in if it was still empty (email-specific invites already
-// have one and shouldn't be overwritten).
 export function attachEmailToInvitation(token, email) {
   const invite = invitations.find((i) => i.token === token);
   if (!invite) return null;
@@ -130,7 +210,7 @@ export function attachEmailToInvitation(token, email) {
 }
 
 // ============================================================
-// TEACHER-FACING (used by InstructorCourseOverview.jsx)
+// TEACHER-FACING
 // ============================================================
 
 export function getCourseInfo(courseId) {
@@ -166,11 +246,15 @@ export function generateShareableLink(courseId) {
   const newInvite = {
     id: `inv-${invitationCounter}`,
     courseId,
-    email: null, // becomes the real student's email once they open it (see attachEmailToInvitation)
+    email: null,
     status: 'pending',
     token: generateToken(),
     createdAt: new Date().toISOString(),
   };
   invitations.push(newInvite);
   return newInvite;
+}
+
+export function getAllCourses() {
+  return Object.values(courses);
 }

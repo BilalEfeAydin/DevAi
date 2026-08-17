@@ -6,8 +6,27 @@ import Sidebar from './Sidebar';
 import {
   UserIcon, BookIcon, CapIcon, BellIcon,
   HelpIcon, MailIcon, ChartIcon,
-  MenuIcon, SettingsIcon
+  MenuIcon, SettingsIcon, PlusIcon,
 } from './Icons';
+import { getCourseInfo } from './Mockenrollments'; // but we need to get all courses for instructor
+// We need a function to get all courses (not just enrollments)
+// We'll add a new export: getAllCourses()
+// For simplicity, we can use getAllEnrollments() but that includes student status.
+// Let's add getAllCourses() to mockEnrollments.
+
+// --- we'll extend mockEnrollments with getAllCourses() ---
+// In the meantime, we'll import the internal courses object? Not ideal.
+// We'll add a new function in mockEnrollments: getAllCourses()
+
+// Let's assume we've added:
+// export function getAllCourses() { return Object.values(courses); }
+
+// For now, we'll use a local mock and update it after registration.
+
+// We'll modify to use the mock store.
+
+// But we need to import the function:
+import { getAllCourses, registerCourse } from './Mockenrollments'; // we'll add getAllCourses in mockEnrollments
 
 const hoverCSS = `
   .courseRow {
@@ -21,16 +40,6 @@ const hoverCSS = `
   }
 `;
 
-// NOTE (flagged deliberately, same pattern as CoursePicker.jsx): these
-// courses are hardcoded placeholders. There is no Courses table / API yet
-// for instructor-created courses (Sprint 4 "Build Courses API" not done).
-// Replace with a real fetch (e.g. GET /courses?instructorId=...) once that
-// backend piece exists.
-const mockCourses = [
-  { id: 'c1', title: 'CS101 Intro to Python', studentCount: 142 },
-  { id: 'c2', title: 'CS202 Data Structures', studentCount: 89 },
-];
-
 function InstructorProfile() {
   const navigate = useNavigate();
 
@@ -40,9 +49,11 @@ function InstructorProfile() {
   const [email, setEmail] = useState('');
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [courses, setCourses] = useState([]);
 
+  // Load profile and courses
   useEffect(() => {
-    async function loadProfile() {
+    async function loadData() {
       try {
         const attrs = await fetchUserAttributes();
         const name = attrs.name || '';
@@ -56,8 +67,18 @@ function InstructorProfile() {
       } finally {
         setLoadingProfile(false);
       }
+
+      // Load courses from mock store
+      // We need to import getAllCourses from mockEnrollments
+      try {
+        const allCourses = getAllCourses();
+        setCourses(allCourses);
+      } catch (err) {
+        console.warn('Could not load courses:', err);
+        setCourses([]);
+      }
     }
-    loadProfile();
+    loadData();
   }, []);
 
   const handleLogout = async () => {
@@ -77,19 +98,12 @@ function InstructorProfile() {
     return first + last || '?';
   };
 
-  // Dashboard = Sprint 6 analytics (aggregate across ALL of this
-  // instructor's courses/exercises, e.g. "50% of students struggling on
-  // Algorithms exercise 4"). Disabled until Sprint 6 -- do not reopen this
-  // scope mid-Sprint-5 (team rule).
-  //
-  // NOTE: 'Configuration' was removed from this level -- rule/honor-code
-  // configuration is per-exercise, not per-instructor-profile. It will
-  // live inside a course's Exercises tab once that's built, not here.
   const navItems = [
     { label: 'Dashboard', icon: <ChartIcon />, active: false, disabled: true, onClick: undefined },
     { label: 'Profile', icon: <UserIcon />, active: true, disabled: false, onClick: undefined },
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
+
   const handleSelectCourse = (course) => {
     navigate('/instructor/course-dashboard', {
       state: { courseId: course.id, courseTitle: course.title },
@@ -118,9 +132,6 @@ function InstructorProfile() {
           </div>
           <div style={styles.headerIcons}>
             <span style={styles.headerIconButton}><BellIcon /></span>
-            {/*  settings is a static icon for now, same as StudentProfile.jsx --
-                no settings panel exists anywhere in the app yet. Wire up onClick
-                here once that panel is built (separate task, not in this scope). */}
             <span style={styles.headerIconButton}><SettingsIcon /></span>
             <span style={styles.avatarCircle}>
               {loadingProfile ? '...' : getInitials()}
@@ -128,7 +139,6 @@ function InstructorProfile() {
           </div>
         </header>
 
-        { /* Profile card with name, email, and initials avatar */ }
         <div style={styles.profileCard}>
           <span style={styles.profileAvatar}>
             {loadingProfile ? '...' : getInitials()}
@@ -143,29 +153,35 @@ function InstructorProfile() {
           </div>
         </div>
 
-        <h3 style={styles.sectionTitle}>Courses Managed</h3>
-        <div style={styles.coursesList}>
-          {mockCourses.map((course) => (
-            <div
-              key={course.id}
-              className="courseRow"
-              style={styles.courseRow}
-              onClick={() => handleSelectCourse(course)}
-            >
-              <span style={styles.courseIcon}><BookIcon /></span>
-              <div style={styles.courseText}>
-                <div style={styles.courseTitle}>{course.title}</div>
-                <div style={styles.courseMeta}>{course.studentCount} students registered</div>
-              </div>
-              <span style={styles.courseArrow}>›</span>
-            </div>
-          ))}
-
-          {/* course creation needs the Courses API (Sprint 4, not built yet).
-              Disabled placeholder so the layout is final without faking a working flow. */}
-          <button type="button" disabled style={styles.registerButton} title="Coming soon">
-            + Register New Course
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+          <h3 style={styles.sectionTitle}>Courses Managed</h3>
+          <button type="button" onClick={() => navigate('/register-course')} style={styles.registerButton}>
+            <PlusIcon /> Register New Course
           </button>
+        </div>
+
+        <div style={styles.coursesList}>
+          {courses.length === 0 ? (
+            <p style={{ color: '#888', fontSize: '0.9rem' }}>No courses yet. Register a new course above.</p>
+          ) : (
+            courses.map((course) => (
+              <div
+                key={course.id}
+                className="courseRow"
+                style={styles.courseRow}
+                onClick={() => handleSelectCourse(course)}
+              >
+                <span style={{ ...styles.courseIcon, backgroundColor: course.color + '1a', color: course.color }}>
+                  <BookIcon />
+                </span>
+                <div style={styles.courseText}>
+                  <div style={styles.courseTitle}>{course.title}</div>
+                  <div style={styles.courseMeta}>{course.instructor}</div>
+                </div>
+                <span style={styles.courseArrow}>›</span>
+              </div>
+            ))
+          )}
         </div>
       </main>
     </div>
@@ -210,7 +226,7 @@ const styles = {
     margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#666',
     display: 'flex', alignItems: 'center', gap: '0.35rem',
   },
-  sectionTitle: { fontSize: '1rem', color: '#333', marginBottom: '0.8rem' },
+  sectionTitle: { fontSize: '1rem', color: '#333', margin: 0 },
   coursesList: { display: 'flex', flexDirection: 'column', gap: '0.8rem' },
   courseRow: {
     backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e7eaf5',
@@ -226,9 +242,10 @@ const styles = {
   courseMeta: { fontSize: '0.8rem', color: '#777', marginTop: '0.15rem' },
   courseArrow: { fontSize: '1.4rem', color: '#999' },
   registerButton: {
-    padding: '0.8rem', borderRadius: '12px', border: '1px dashed #d7dce8',
-    backgroundColor: 'transparent', color: '#98a0b8', fontSize: '0.9rem', fontWeight: 600,
-    cursor: 'not-allowed',
+    display: 'flex', alignItems: 'center', gap: '0.4rem',
+    padding: '0.5rem 1rem', borderRadius: '8px', border: `1px solid ${NAVY}`,
+    backgroundColor: 'transparent', color: NAVY, fontSize: '0.85rem', fontWeight: 600,
+    cursor: 'pointer',
   },
 };
 

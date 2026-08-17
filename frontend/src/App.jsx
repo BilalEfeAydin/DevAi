@@ -8,7 +8,8 @@ import CoursePicker from './CoursePicker';
 import Submission from './Submission';
 import CourseDescription from './CourseDescription';
 import AcceptInvitation from './AcceptInvitation';
-import InstructorCourseOverview from './Instructorcourseoverview';
+import InstructorCourseOverview from './InstructorCourseOverview';
+import RegisterCourse from './RegisterCourse';
 
 function App() {
   return (
@@ -28,11 +29,10 @@ function App() {
         {/* Instructor-only routes */}
         <Route path="/profile/instructor" element={<AuthGuard allowedRoles={['instructor']}><InstructorProfile /></AuthGuard>} />
         <Route path="/instructor/course-dashboard" element={<AuthGuard allowedRoles={['instructor']}><InstructorCourseOverview /></AuthGuard>} />
+        <Route path="/register-course" element={<AuthGuard allowedRoles={['instructor']}><RegisterCourse /></AuthGuard>} />
 
         {/* Default route: anyone landing on "/" goes to login for now */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* Catch-all: unknown URLs fall back to login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
