@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
 import { NAVY, NAVY_DARK } from './Theme';
@@ -9,7 +9,7 @@ import {
   FolderIcon, InboxIcon, ChartIcon,
   LockIcon, MailIcon,
 } from './Icons';
-import { registerCourse } from './mockEnrollments';
+import { registerCourse } from './Mockenrollments';
 
 // Color palette for sections
 const COLORS = {
@@ -22,6 +22,26 @@ const COLORS = {
   document: '#8b5cf6',
   strictness: '#14b8a6',
 };
+
+// FIX: Card must live OUTSIDE the RegisterCourse component. It was
+// previously defined inside the component body -- that meant every
+// keystroke (every setState) caused RegisterCourse to re-render, which
+// created a BRAND NEW Card function on every render. React saw a
+// different component reference each time and unmounted + remounted the
+// entire subtree (including every <input>) instead of just updating it.
+// That's what caused "only one letter typeable" + page latency -- each
+// keystroke was destroying and rebuilding the whole form.
+const Card = ({ title, icon, color, children }) => (
+  <div style={{ ...styles.card, borderTop: `4px solid ${color}` }}>
+    <div style={styles.cardHeader}>
+      <span style={{ ...styles.titleBadge, backgroundColor: color }}>
+        <span style={styles.badgeIcon}>{icon}</span>
+        {title}
+      </span>
+    </div>
+    {children}
+  </div>
+);
 
 function RegisterCourse() {
   const navigate = useNavigate();
@@ -56,7 +76,7 @@ function RegisterCourse() {
   });
   const [customRequired, setCustomRequired] = useState('');
   const [documentFile, setDocumentFile] = useState(null);
-   const [documentText, setDocumentText] = useState(''); 
+  const [documentText, setDocumentText] = useState('');
   const [strictness, setStrictness] = useState('Medium');
 
   const [error, setError] = useState('');
@@ -64,8 +84,12 @@ function RegisterCourse() {
 
   const fileInputRef = useRef(null);
 
-  // Load profile
-  useState(() => {
+  // FIX: this was `useState(() => {...}, [])`, which is wrong -- useState's
+  // second argument is silently ignored, and running an async side effect
+  // inside a lazy state initializer runs during the render phase, not
+  // after mount. useEffect is the correct hook for "run this once after
+  // the component mounts."
+  useEffect(() => {
     async function loadProfile() {
       try {
         const attrs = await fetchUserAttributes();
@@ -137,7 +161,6 @@ function RegisterCourse() {
   };
 
   // File upload handlers
-  // File upload handlers
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file && file.type === 'text/plain') {
@@ -201,13 +224,13 @@ function RegisterCourse() {
       documentName: documentFile ? documentFile.name : 'No document uploaded',
     };
 
-   try {
+    try {
       registerCourse({
         title: title.trim(),
         description: description.trim() || 'No description provided.',
         instructorName: `${firstName} ${lastName}`.trim() || 'Instructor',
         rules,
-        honorCodeText: documentText, // NEW
+        honorCodeText: documentText,
       });
       setSuccess('Course registered successfully!');
       setTimeout(() => navigate('/profile/instructor'), 1500);
@@ -215,19 +238,6 @@ function RegisterCourse() {
       setError(err.message || 'Failed to register course.');
     }
   };
-
-  // Helper to render a card with a colorful title badge
-  const Card = ({ title, icon, color, children }) => (
-    <div style={{ ...styles.card, borderTop: `4px solid ${color}` }}>
-      <div style={styles.cardHeader}>
-        <span style={{ ...styles.titleBadge, backgroundColor: color }}>
-          <span style={styles.badgeIcon}>{icon}</span>
-          {title}
-        </span>
-      </div>
-      {children}
-    </div>
-  );
 
   return (
     <div style={styles.page}>
@@ -302,6 +312,20 @@ function RegisterCourse() {
                 type="text"
                 value={customNaming}
                 onChange={(e) => setCustomNaming(e.target.value)}
+                onKeyDown={(e) => {
+                  // FIX: pressing Enter inside ANY text input nested in a
+                  // <form> triggers native form submission by default --
+                  // even though the "Add" button next to it is type="button"
+                  // and has nothing to do with it. That was firing
+                  // handleSubmit() (creating the course + navigating back to
+                  // profile) instead of just adding this tag. preventDefault
+                  // stops the implicit submit; we call the intended action
+                  // ourselves.
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addCustomNaming();
+                  }
+                }}
                 placeholder="Add custom rule..."
                 style={{ ...styles.input, flex: 1 }}
               />
@@ -378,6 +402,12 @@ function RegisterCourse() {
                 type="text"
                 value={customForbidden}
                 onChange={(e) => setCustomForbidden(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addCustomForbidden();
+                  }
+                }}
                 placeholder="Custom ban..."
                 style={{ ...styles.input, flex: 1 }}
               />
@@ -409,6 +439,12 @@ function RegisterCourse() {
                 type="text"
                 value={customRequired}
                 onChange={(e) => setCustomRequired(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addCustomRequired();
+                  }
+                }}
                 placeholder="Add required pattern..."
                 style={{ ...styles.input, flex: 1 }}
               />

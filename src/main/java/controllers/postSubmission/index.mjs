@@ -14,20 +14,24 @@
 //   7. Return everything to the frontend
 
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, UpdateCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, UpdateCommand, QueryCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { randomUUID } from "crypto";
 import { Sandbox } from "@e2b/code-interpreter";
 
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
 const bedrockClient = new BedrockRuntimeClient({ region: "us-east-1" });
+const s3Client = new S3Client({});
 
 const TABLE_NAME = process.env.TABLE_NAME || "DevAi-Submissions";
 const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || "us.anthropic.claude-haiku-4-5-20251001-v1:0";
+const COURSES_TABLE = process.env.COURSES_TABLE_NAME || "DevAi-Courses";
+const HONOR_CODE_BUCKET = process.env.HONOR_CODE_BUCKET || "devai-honor-code-docs";
 
-// ── Hardcoded honor code (will be replaced with S3 fetch once Teacher API is built) ──
-const HONOR_CODE = `
+// ── Hardcoded honor code fallback (used if a course has no rules mapped) ──
+const HONOR_CODE_FALLBACK = `
 University Honor Code — CS Department:
 1. Students must write their own code. Copy-pasting from external sources is prohibited.
 2. Students may discuss high-level ideas with peers, but must not share or copy code.
@@ -36,8 +40,50 @@ University Honor Code — CS Department:
 4. All submitted code must include comments explaining the student's reasoning.
 `;
 
+// ── Fetch course-specific honor code from S3 ────────────────────────
+async function fetchHonorCode(courseId) {
+  try {
+    // 1. Look up the course in DynamoDB
+    const courseRes = await ddb.send(new GetCommand({
+      TableName: COURSES_TABLE,
+      Key: { CourseID: courseId }
+    }));
+    
+    if (!courseRes.Item || !courseRes.Item.HonorCodeDocURI) {
+      console.log(`No custom honor code URI found for course ${courseId}. Using fallback.`);
+      return HONOR_CODE_FALLBACK;
+    }
+
+    const s3Uri = courseRes.Item.HonorCodeDocURI;
+    
+    // 2. Parse the S3 URI (e.g., s3://devai-honor-code-docs/CS101/honor-code.txt)
+    // Matches s3://bucket/key
+    const match = s3Uri.match(/^s3:\/\/([^\/]+)\/(.+)$/);
+    if (!match) {
+      console.warn(`Invalid S3 URI format for course ${courseId}: ${s3Uri}. Using fallback.`);
+      return HONOR_CODE_FALLBACK;
+    }
+
+    const bucketName = match[1];
+    const objectKey = match[2];
+
+    // 3. Fetch object from S3
+    const s3Res = await s3Client.send(new GetObjectCommand({
+      Bucket: bucketName,
+      Key: objectKey,
+    }));
+
+    // 4. Read stream to string
+    const honorCodeText = await s3Res.Body.transformToString("utf-8");
+    return honorCodeText;
+  } catch (err) {
+    console.warn(`Failed to fetch custom honor code for course ${courseId}: ${err.message}. Using fallback.`);
+    return HONOR_CODE_FALLBACK;
+  }
+}
+
 // ── Build graduated system prompt based on attempt number ──────────
-function buildSystemPrompt(attemptNumber) {
+function buildSystemPrompt(attemptNumber, hasPreviousReview) {
   let hintLevel, hintInstructions;
 
   if (attemptNumber <= 2) {
@@ -67,6 +113,14 @@ HINT LEVEL: DIRECT HINTS (Attempt 5+)
 - Be as helpful as possible: "On line X, you create an array of size N, but then try to access index N. What happens?"`;
   }
 
+  const versionComparisonSchema = hasPreviousReview ? `
+  "resolvedIssues": [
+    { "line": <line_number>, "originalMessage": "The original Socratic question", "resolution": "Brief explanation of how the student fixed it" }
+  ],
+  "persistingIssues": [
+    { "line": <line_number>, "originalMessage": "The original Socratic question", "message": "Your updated Socratic question focusing on why the issue still persists" }
+  ],` : "";
+
   return `You are an expert, minimalist Computer Science Professor acting as a Socratic tutor.
 Evaluate the provided student code against the Honor Code and for any logic or syntax errors.
 
@@ -84,9 +138,14 @@ CRITICAL CONSTRAINTS FOR YOUR QUESTIONS:
 1. Check if the code appears to violate any rules in the provided <honor_code>.
 2. Avoid directly quoting the student's code. You may reference general concepts but never copy-paste their exact code.
 3. NEVER suggest the correct syntax or alternative logic.
-4. The student code has explicit line numbers prepended. You MUST use these line numbers in your JSON response.
-5. Order feedback items by severity: VIOLATION issues first, then concerns, then suggestions.
-6. If the code is correct and follows the honor code, return status PASS with an empty feedback array.
+4. NEVER NAME the specific operator, keyword, or syntax the student used incorrectly. Do NOT contrast what they wrote with what they should have written (e.g., NEVER say "you used X instead of Y").
+5. Your questions should make the student THINK about the problem, not reveal it. A good question forces them to re-read their code and discover the issue themselves.
+6. The "summary" field MUST ALSO obey these rules. The summary must be a generic, high-level assessment (e.g., "The code has a syntax error") and MUST NOT give away the specific error or solution.
+7. The student code has explicit line numbers prepended. You MUST use these line numbers in your JSON response.
+8. Order feedback items by severity: VIOLATION issues first, then concerns, then suggestions.
+9. If the code is correct and follows the honor code, return status PASS with an empty feedback array.
+10. EVERY Socratic question/message in your feedback array MUST be extremely concise (AT MOST 1 SENTENCES MAXIMUM). Do not ramble.
+11. MUTUAL EXCLUSIVITY: An issue is EITHER a persisting issue OR a new issue. NEVER put the same issue in both the "persistingIssues" and "feedback" arrays.
 
 Respond with a JSON object in this format:
 {
@@ -95,7 +154,7 @@ Respond with a JSON object in this format:
   "generalSuggestion": "Brief suggestion about the whole code if there is",
   "confidence": "HIGH" | "MEDIUM" | "LOW",
   "attemptNumber": ${attemptNumber},
-  "hintLevel": "${hintLevel}",
+  "hintLevel": "${hintLevel}",${versionComparisonSchema}
   "feedback": [
     {
       "line": <line_number>,
@@ -110,46 +169,75 @@ Do NOT include any markdown syntax.
 The very first character of your response MUST be '{' and the very last character MUST be '}'.`;
 }
 
-// ── Count previous submissions for this student + course ──────────
-async function countPreviousAttempts(studentId, courseId) {
+// ── Fetch previous submission for this student + course + assignment ─────────────
+async function fetchPreviousSubmission(studentId, courseId, assignmentId) {
   try {
     const result = await ddb.send(new QueryCommand({
       TableName: TABLE_NAME,
       IndexName: "StudentIndex",
       KeyConditionExpression: "StudentID = :sid",
-      FilterExpression: "CourseID = :cid",
+      FilterExpression: "CourseID = :cid AND AssignmentID = :aid",
       ExpressionAttributeValues: {
         ":sid": studentId,
         ":cid": courseId,
+        ":aid": assignmentId || "default",
       },
-      Select: "COUNT",
+      ScanIndexForward: false, // Newest first
     }));
-    return result.Count || 0;
+    
+    const items = result.Items || [];
+    const count = items.length;
+    // Find the most recent submission that has a VALID aiReview (not a fallback)
+    const latestWithReview = items.find(
+      item => item.aiReview && item.aiReview.confidence !== "LOW"
+    ) || null;
+
+    return {
+      count,
+      previousReview: latestWithReview ? latestWithReview.aiReview : null,
+    };
   } catch (err) {
-    console.warn("Could not count previous attempts (index may not exist yet):", err.message);
-    return 0;
+    console.warn("Could not fetch previous submissions (index may not exist yet):", err.message);
+    return { count: 0, previousReview: null };
   }
 }
 
 // ── Call Bedrock AI for code review ───────────────────────────────
-async function reviewWithBedrock(code, attemptNumber) {
+async function reviewWithBedrock(code, attemptNumber, previousReview, honorCode) {
   // Add line numbers to the code
   const numberedCode = code
     .split("\n")
     .map((line, i) => `${i + 1}: ${line}`)
     .join("\n");
 
-  const systemPrompt = buildSystemPrompt(attemptNumber);
+  const hasPreviousReview = previousReview != null;
+  let systemPrompt = buildSystemPrompt(attemptNumber, hasPreviousReview);
 
-  const userMessage = `Please review the following student code submission against the honor code.
+  if (hasPreviousReview) {
+    systemPrompt += `\n\nCOMPARISON INSTRUCTIONS:
+- You have been provided with the student's PREVIOUS AI review in the user message.
+- Compare their current code against the issues flagged in that previous review.
+- For each previous issue, determine if the student RESOLVED it or if it PERSISTS.
+- Populate the "resolvedIssues" array with items they successfully fixed. Start your summary by praising them for fixing these.
+- Populate the "persistingIssues" array with items that STILL exist. Guide them further on these issues based on the current hint level.
+- Any completely NEW issues found in the current code should go into the standard "feedback" array.`;
+  }
+
+  let userMessage = `Please review the following student code submission against the honor code.
 
 <honor_code>
-${HONOR_CODE}
+${honorCode}
 </honor_code>
 
 <student_code>
 ${numberedCode}
 </student_code>`;
+
+  if (previousReview) {
+    userMessage += `\n\n<previous_review attempt="${previousReview.attemptNumber || attemptNumber - 1}">
+${JSON.stringify(previousReview, null, 2)}
+</previous_review>`;
+  }
 
   // Retry up to 2 times for JSON parsing failures
   for (let retry = 0; retry < 2; retry++) {
@@ -171,15 +259,16 @@ ${numberedCode}
 
       const outputText = response.output.message.content[0].text;
 
-      // Parse JSON (handle possible markdown code fences)
+      // Robust JSON extraction: find the first '{' and last '}'
       let jsonStr = outputText;
-      if (jsonStr.includes("```json")) {
-        jsonStr = jsonStr.split("```json")[1].split("```")[0];
-      } else if (jsonStr.includes("```")) {
-        jsonStr = jsonStr.split("```")[1].split("```")[0];
+      const firstBrace = jsonStr.indexOf("{");
+      const lastBrace = jsonStr.lastIndexOf("}");
+
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
       }
 
-      const parsed = JSON.parse(jsonStr.trim());
+      const parsed = JSON.parse(jsonStr);
       return parsed;
     } catch (parseErr) {
       console.warn(`Bedrock response parse attempt ${retry + 1} failed:`, parseErr.message);
@@ -203,30 +292,70 @@ ${numberedCode}
 export const handler = async (event) => {
   try {
     const body = typeof event.body === "string" ? JSON.parse(event.body) : (event.body || {});
-    const { courseId, studentId, content } = body;
+    const { courseId, content, submitForReview, assignmentId } = body;
+
+    // ── 0. Extract caller identity from JWT ──────────────────
+    const claims = event.requestContext?.authorizer?.jwt?.claims || {};
+    const callerSub = claims.sub;
+    const callerGroups = claims["cognito:groups"] || "";
+
+    // Role check: instructors cannot submit code
+    if (callerGroups.includes("instructor")) {
+      return respond(403, { message: "Instructors cannot submit code." });
+    }
+
+    // Identity enforcement: always use the JWT sub as studentId
+    const studentId = callerSub || body.studentId;
 
     if (!courseId || !studentId || !content) {
       return respond(400, { message: "courseId, studentId and content are required" });
     }
 
-    // ── 1. Save submission to DynamoDB ──────────────────────────
+    // Enrollment check: verify the student is enrolled in this course
+    if (submitForReview) {
+      try {
+        const courseRes = await ddb.send(new GetCommand({
+          TableName: COURSES_TABLE,
+          Key: { CourseID: courseId },
+        }));
+
+        const course = courseRes.Item;
+        if (course && course.EnrolledStudents) {
+          const enrolled = Array.isArray(course.EnrolledStudents)
+            ? course.EnrolledStudents
+            : [];
+          if (!enrolled.includes(studentId)) {
+            return respond(403, { message: "You are not enrolled in this course." });
+          }
+        }
+        // If course doesn't exist or has no EnrolledStudents, allow (backwards compat)
+      } catch (enrollErr) {
+        console.warn("Enrollment check failed, allowing submission:", enrollErr.message);
+      }
+    }
+
+    // ── 1. Save submission to DynamoDB (only on formal submit) ──
     const now = new Date().toISOString();
     const submissionId = randomUUID();
-    const item = {
-      SubmissionID: submissionId,
-      CourseID: courseId,
-      StudentID: studentId,
-      content,
-      status: "submitted",
-      CreatedAt: now,
-      UpdatedAt: now,
-    };
 
-    await ddb.send(new PutCommand({
-      TableName: TABLE_NAME,
-      Item: item,
-      ConditionExpression: "attribute_not_exists(SubmissionID)",
-    }));
+    if (submitForReview) {
+      const item = {
+        SubmissionID: submissionId,
+        CourseID: courseId,
+        AssignmentID: assignmentId || "default",
+        StudentID: studentId,
+        content,
+        status: "submitted",
+        CreatedAt: now,
+        UpdatedAt: now,
+      };
+
+      await ddb.send(new PutCommand({
+        TableName: TABLE_NAME,
+        Item: item,
+        ConditionExpression: "attribute_not_exists(SubmissionID)",
+      }));
+    }
 
     // ── 2. Execute code in E2B sandbox ─────────────────────────
     let executionResult = {
@@ -272,58 +401,67 @@ export const handler = async (event) => {
       }
     }
 
-    // ── 3. AI Review via Bedrock ───────────────────────────────
-    const previousAttempts = await countPreviousAttempts(studentId, courseId);
-    const attemptNumber = previousAttempts + 1; // +1 because the current submission is already saved
-
+    // ── 3. AI Review via Bedrock (only on formal submit) ───────
     let aiReview = null;
-    try {
-      aiReview = await reviewWithBedrock(content, attemptNumber);
-    } catch (bedrockErr) {
-      console.error("Bedrock AI review error:", bedrockErr);
-      aiReview = {
-        status: "NEEDS_REVIEW",
-        summary: "AI review encountered an error.",
-        generalSuggestion: "The code was executed successfully. AI feedback will be available on retry.",
-        confidence: "LOW",
-        attemptNumber,
-        hintLevel: "UNKNOWN",
-        feedback: [],
-      };
+    let attemptNumber = null;
+
+    if (submitForReview) {
+      const { count, previousReview } = await fetchPreviousSubmission(studentId, courseId, assignmentId);
+      attemptNumber = count + 1;
+
+      try {
+        const honorCode = await fetchHonorCode(courseId);
+        aiReview = await reviewWithBedrock(content, attemptNumber, previousReview, honorCode);
+      } catch (bedrockErr) {
+        console.error("Bedrock AI review error:", bedrockErr);
+        aiReview = {
+          status: "NEEDS_REVIEW",
+          summary: "AI review encountered an error.",
+          generalSuggestion: "The code was executed successfully. AI feedback will be available on retry.",
+          confidence: "LOW",
+          attemptNumber,
+          hintLevel: "UNKNOWN",
+          feedback: [],
+        };
+      }
+
+      // ── 4. Update DynamoDB with execution + AI review results ──
+      const updatedAt = new Date().toISOString();
+      await ddb.send(new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { SubmissionID: submissionId },
+        UpdateExpression:
+          "SET #status = :status, executionStatus = :execStatus, stdout = :stdout, stderr = :stderr, executionError = :error, aiReview = :aiReview, attemptNumber = :attemptNum, UpdatedAt = :updatedAt",
+        ExpressionAttributeNames: {
+          "#status": "status",
+        },
+        ExpressionAttributeValues: {
+          ":status": "reviewed",
+          ":execStatus": executionResult.executionStatus,
+          ":stdout": executionResult.stdout,
+          ":stderr": executionResult.stderr,
+          ":error": executionResult.error,
+          ":aiReview": aiReview,
+          ":attemptNum": attemptNumber,
+          ":updatedAt": updatedAt,
+        },
+      }));
     }
 
-    // ── 4. Update DynamoDB with execution + AI review results ──
-    const updatedAt = new Date().toISOString();
-    await ddb.send(new UpdateCommand({
-      TableName: TABLE_NAME,
-      Key: { SubmissionID: submissionId },
-      UpdateExpression:
-        "SET #status = :status, executionStatus = :execStatus, stdout = :stdout, stderr = :stderr, executionError = :error, aiReview = :aiReview, attemptNumber = :attemptNum, UpdatedAt = :updatedAt",
-      ExpressionAttributeNames: {
-        "#status": "status",
-      },
-      ExpressionAttributeValues: {
-        ":status": "reviewed",
-        ":execStatus": executionResult.executionStatus,
-        ":stdout": executionResult.stdout,
-        ":stderr": executionResult.stderr,
-        ":error": executionResult.error,
-        ":aiReview": aiReview,
-        ":attemptNum": attemptNumber,
-        ":updatedAt": updatedAt,
-      },
-    }));
-
     // ── 5. Return full result to frontend ──────────────────────
-    return respond(201, {
-      submission: {
-        ...item,
-        status: "reviewed",
-        attemptNumber,
-        UpdatedAt: updatedAt,
-      },
+    return respond(submitForReview ? 201 : 200, {
+      ...(submitForReview ? {
+        submission: {
+          SubmissionID: submissionId,
+          CourseID: courseId,
+          StudentID: studentId,
+          content,
+          status: "reviewed",
+          attemptNumber,
+        },
+      } : {}),
       execution: executionResult,
-      aiReview,
+      ...(aiReview ? { aiReview } : {}),
     });
 
   } catch (err) {

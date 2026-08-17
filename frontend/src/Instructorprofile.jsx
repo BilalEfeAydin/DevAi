@@ -8,7 +8,7 @@ import {
   HelpIcon, MailIcon, ChartIcon,
   MenuIcon, SettingsIcon, PlusIcon,
 } from './Icons';
-import { getCourseInfo } from './mockEnrollments'; // but we need to get all courses for instructor
+import { getCourseInfo } from './Mockenrollments'; // but we need to get all courses for instructor
 // We need a function to get all courses (not just enrollments)
 // We'll add a new export: getAllCourses()
 // For simplicity, we can use getAllEnrollments() but that includes student status.
@@ -26,7 +26,7 @@ import { getCourseInfo } from './mockEnrollments'; // but we need to get all cou
 // We'll modify to use the mock store.
 
 // But we need to import the function:
-import { getAllCourses, registerCourse } from './mockEnrollments'; // we'll add getAllCourses in mockEnrollments
+import { getAllCourses, registerCourse } from './Mockenrollments'; // we'll add getAllCourses in mockEnrollments
 
 const hoverCSS = `
   .courseRow {
