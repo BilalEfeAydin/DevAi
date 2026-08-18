@@ -442,7 +442,7 @@ export const handler = async (event) => {
     let sandbox;
     try {
       sandbox = await Sandbox.create();
-      const execution = await sandbox.runCode(content);
+      const execution = await sandbox.runCode(content, { timeoutMs: 10000 });
 
       // Capture stdout
       executionResult.stdout = execution.logs.stdout || [];
