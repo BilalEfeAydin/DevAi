@@ -55,8 +55,8 @@ function InstructorCourseDashboard() {
     }
   };
 
-  const navItems = [
-    { label: 'Dashboard', icon: <ChartIcon />, active: false, disabled: true, onClick: undefined },
+    const navItems = [
+    { label: 'Dashboard', icon: <ChartIcon />, active: false, disabled: false, onClick: () => navigate('/instructor/dashboard') },
     { label: 'Configuration', icon: <SettingsIcon />, active: false, disabled: true, onClick: undefined },
     { label: 'Profile', icon: <UserIcon />, active: false, disabled: false, onClick: () => navigate('/profile/instructor') },
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },

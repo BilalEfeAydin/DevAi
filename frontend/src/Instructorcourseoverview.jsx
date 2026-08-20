@@ -5,15 +5,12 @@ import { NAVY, NAVY_DARK } from './Theme';
 import Sidebar from './Sidebar';
 import {
   BookIcon, CapIcon, BellIcon, HelpIcon,
-  MenuIcon, SettingsIcon, UserIcon, MailIcon, FolderIcon,
+  MenuIcon, SettingsIcon, UserIcon, MailIcon,
 } from './Icons';
 import {
   getCourseInfo, getCourseDetails, getInvitationsForCourse,
   sendInvitationByEmail, generateShareableLink,
 } from './Mockenrollments';
-import {
-  getResourcesForCourse, addResource, deleteResource,
-} from './mockResources';
 
 
 // NOTE (flagged deliberately): falls back to 'c1' only if no courseId was
@@ -51,7 +48,7 @@ function InstructorCourseOverview() {
   const location = useLocation();
   const COURSE_ID = location.state?.courseId || FALLBACK_COURSE_ID;
 
-  const [view, setView] = useState('overview'); // 'overview' | 'students' | 'resources'
+  const [view, setView] = useState('overview'); // 'overview' | 'students'
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -69,11 +66,6 @@ function InstructorCourseOverview() {
 
   const [shareableLink, setShareableLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
-
-  // Resources tab state
-  const [resources, setResources] = useState(() => getResourcesForCourse(COURSE_ID));
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     async function loadProfile() {
@@ -112,17 +104,17 @@ function InstructorCourseOverview() {
   //   Built now, on this page.
   // - 'Students' = invite by email/link + invitation list. This is what
   //   used to be called 'Overview' before the rename.
-  // - 'Resources' = docs/files instructor uploads so students can consult
-  //   them without copy-pasting a solution. Different from the honor code
-  //   (course-level policy doc, wired to Bedrock via postSubmission) and
-  //   different from per-exercise Rule Configuration -- see mockResources.js.
+  // - Resources tab was REMOVED (Sprint 6 decision) -- no S3 bucket, no
+  //   upload Lambda, no API route exist for it (Mockresources.js is a
+  //   metadata-only mock, no real file storage). Kept mockResources.js
+  //   dormant/untouched in case there's time to build the real feature
+  //   later; nothing in this file references it anymore.
   // - 'Exercises' will lead to exercise creation + Rule Configuration
   //   (Naming Conventions / Forbidden Practices / etc. mockup) -- that's
   //   its own task, not built yet.
   const navItems = [
     { label: 'Overview', icon: <BookIcon />, active: view === 'overview', disabled: false, onClick: () => { setView('overview'); closeSidebar(); } },
     { label: 'Students', icon: <UserIcon />, active: view === 'students', disabled: false, onClick: () => { setView('students'); closeSidebar(); } },
-    { label: 'Resources', icon: <FolderIcon />, active: view === 'resources', disabled: false, onClick: () => { setView('resources'); closeSidebar(); } },
     { label: 'Exercises', icon: <CapIcon />, active: false, disabled: true, onClick: undefined },
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
@@ -180,31 +172,6 @@ function InstructorCourseOverview() {
     } catch (err) {
       console.warn('Clipboard copy failed:', err);
     }
-  };
-
-  // --- Resources handlers ---
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    setSelectedFile(file || null);
-  };
-
-  const handleUploadResource = () => {
-    if (!selectedFile) return;
-    setUploading(true);
-    // NOTE (flagged deliberately): no real upload happens here -- see
-    // mockResources.js. This just records the file's metadata so the
-    // UI/UX is complete and testable ahead of the real S3 + Lambda wiring
-    // (POST /courses/:id/resources, same pattern as the honor-code
-    // presigned-URL Lambda that's still pending).
-    addResource(COURSE_ID, selectedFile);
-    setResources(getResourcesForCourse(COURSE_ID));
-    setSelectedFile(null);
-    setUploading(false);
-  };
-
-  const handleDeleteResource = (resourceId) => {
-    deleteResource(COURSE_ID, resourceId);
-    setResources(getResourcesForCourse(COURSE_ID));
   };
 
   if (!course) {
@@ -394,67 +361,6 @@ function InstructorCourseOverview() {
             </section>
           </div>
         )}
-
-        {/* ============================================================ */}
-        {/* RESOURCES VIEW                                               */}
-        {/* ============================================================ */}
-        {view === 'resources' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-            <section style={styles.card}>
-              <h2 style={styles.cardTitle}>Course Resources</h2>
-              <p style={styles.cardSubtitle}>
-                Upload documentation or reference files students can consult on their own -- e.g. a style
-                guide or a debugging checklist -- without copy-pasting a solution.
-              </p>
-
-              <div style={styles.uploadRow}>
-                <label style={styles.fileInputLabel}>
-                  {selectedFile ? selectedFile.name : 'Choose a file...'}
-                  <input type="file" onChange={handleFileSelect} style={{ display: 'none' }} />
-                </label>
-                <button
-                  type="button"
-                  onClick={handleUploadResource}
-                  disabled={!selectedFile || uploading}
-                  className="invitePillButton"
-                  style={styles.pillButtonPrimary}
-                >
-                  {uploading ? 'Uploading...' : 'Upload'}
-                </button>
-              </div>
-            </section>
-
-            <section style={styles.card}>
-              <h2 style={styles.cardTitle}>Uploaded Resources</h2>
-              {resources.length === 0 ? (
-                <p style={styles.emptyText}>No resources uploaded yet for this course.</p>
-              ) : (
-                <div style={styles.table}>
-                  <div style={styles.tableHeaderRow}>
-                    <span style={{ ...styles.tableCell, flex: 2 }}>File</span>
-                    <span style={{ ...styles.tableCell, flex: 1 }}>Size</span>
-                    <span style={{ ...styles.tableCell, flex: 1.2 }}>Uploaded</span>
-                    <span style={{ ...styles.tableCell, flex: 0.6 }} />
-                  </div>
-                  {resources.map((res) => (
-                    <div key={res.id} style={styles.tableRow}>
-                      <span style={{ ...styles.tableCell, flex: 2 }}>{res.name}</span>
-                      <span style={{ ...styles.tableCell, flex: 1, color: '#888' }}>{res.sizeLabel}</span>
-                      <span style={{ ...styles.tableCell, flex: 1.2, color: '#888', fontSize: '0.8rem' }}>
-                        {new Date(res.uploadedAt).toLocaleDateString()}
-                      </span>
-                      <span style={{ ...styles.tableCell, flex: 0.6 }}>
-                        <button type="button" onClick={() => handleDeleteResource(res.id)} style={styles.deleteButton}>
-                          Remove
-                        </button>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-        )}
       </main>
     </div>
   );
@@ -539,17 +445,6 @@ const styles = {
   badgeDeclined: {
     fontSize: '0.7rem', fontWeight: 700, color: '#991b1b', backgroundColor: '#fee2e2',
     padding: '0.2rem 0.6rem', borderRadius: '999px', textTransform: 'capitalize',
-  },
-
-  // --- Resources tab ---
-  uploadRow: { display: 'flex', gap: '0.8rem', alignItems: 'center', marginTop: '0.4rem', flexWrap: 'wrap' },
-  fileInputLabel: {
-    flex: 1, minWidth: '220px', height: '44px', padding: '0 1rem', borderRadius: '999px',
-    border: '1px dashed #d7dce8', fontSize: '0.85rem', color: '#555',
-    backgroundColor: '#f7f8fc', display: 'flex', alignItems: 'center', cursor: 'pointer',
-  },
-  deleteButton: {
-    background: 'none', border: 'none', color: '#c00', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', padding: 0,
   },
 };
 

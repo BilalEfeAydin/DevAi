@@ -98,8 +98,8 @@ function InstructorProfile() {
     return first + last || '?';
   };
 
-  const navItems = [
-    { label: 'Dashboard', icon: <ChartIcon />, active: false, disabled: true, onClick: undefined },
+    const navItems = [
+    { label: 'Dashboard', icon: <ChartIcon />, active: false, disabled: false, onClick: () => navigate('/instructor/dashboard') },
     { label: 'Profile', icon: <UserIcon />, active: true, disabled: false, onClick: undefined },
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];

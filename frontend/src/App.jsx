@@ -4,6 +4,7 @@ import Login from './Login';
 import AuthGuard from './AuthGuard';
 import StudentProfile from './Studentprofile';
 import InstructorProfile from './Instructorprofile';
+import InstructorDashboard from './InstructorDashboard';
 import CoursePicker from './CoursePicker';
 import Submission from './Submission';
 import CourseDescription from './CourseDescription';
@@ -28,6 +29,7 @@ function App() {
 
         {/* Instructor-only routes */}
         <Route path="/profile/instructor" element={<AuthGuard allowedRoles={['instructor']}><InstructorProfile /></AuthGuard>} />
+        <Route path="/instructor/dashboard" element={<AuthGuard allowedRoles={['instructor']}><InstructorDashboard /></AuthGuard>} />
         <Route path="/instructor/course-dashboard" element={<AuthGuard allowedRoles={['instructor']}><InstructorCourseOverview /></AuthGuard>} />
         <Route path="/register-course" element={<AuthGuard allowedRoles={['instructor']}><RegisterCourse /></AuthGuard>} />
 

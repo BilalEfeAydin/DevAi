@@ -5,10 +5,9 @@ import { NAVY, NAVY_DARK } from './Theme';
 import Sidebar from './Sidebar';
 import {
   BookIcon, CapIcon, BellIcon,
-  HelpIcon, MenuIcon, SettingsIcon, ArrowIcon, FolderIcon
+  HelpIcon, MenuIcon, SettingsIcon, ArrowIcon
 } from './Icons';
 import { getCourseDetails } from './Mockenrollments';
-import { getResourcesForCourse } from './mockResources';
 
 // Mock exercises (unchanged)
 const exercisesByCourse = {
@@ -43,7 +42,7 @@ function CourseDescription() {
   const courseTitle = location.state?.courseTitle || 'Course';
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [view, setView] = useState('course'); // 'course' | 'exercises' | 'resources'
+  const [view, setView] = useState('course'); // 'course' | 'exercises'
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -79,7 +78,6 @@ function CourseDescription() {
   };
 
   const exercises = exercisesByCourse[courseId] || [];
-  const resources = getResourcesForCourse(courseId);
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
@@ -107,13 +105,6 @@ function CourseDescription() {
       disabled: false,
       onClick: () => { setView('exercises'); closeSidebar(); },
     },
-    {
-      label: 'Resources',
-      icon: <FolderIcon />,
-      active: view === 'resources',
-      disabled: false,
-      onClick: () => { setView('resources'); closeSidebar(); },
-    },
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
 
@@ -130,13 +121,6 @@ function CourseDescription() {
         starterCode: exercise.starterCode,
       },
     });
-  };
-
-  // NOTE (flagged deliberately): no real file to download yet -- see
-  // mockResources.js. This just tells the student it's not wired up
-  // instead of silently failing or pretending to download something.
-  const handleDownloadResource = (name) => {
-    alert(`"${name}" isn't wired to the backend yet -- download will work once the Resources API is built.`);
   };
 
   return (
@@ -158,7 +142,7 @@ function CourseDescription() {
               <MenuIcon />
             </button>
             <h1 style={styles.pageTitle}>
-              {view === 'course' ? 'Course Details' : (view === 'exercises' ? 'Exercises' : 'Resources')}
+              {view === 'course' ? 'Course Details' : 'Exercises'}
             </h1>
           </div>
           <div style={styles.headerIcons}>
@@ -256,33 +240,6 @@ function CourseDescription() {
             )}
           </div>
         )}
-
-        {view === 'resources' && (
-          <div style={styles.exerciseContainer}>
-            <h2 style={styles.exerciseSectionTitle}>Resources</h2>
-            {resources.length === 0 ? (
-              <p style={styles.emptyText}>No resources have been uploaded for this course yet.</p>
-            ) : (
-              <div style={styles.exerciseGrid}>
-                {resources.map((res) => (
-                  <div key={res.id} style={{ ...styles.exerciseCard, cursor: 'default' }}>
-                    <div style={styles.exerciseTopRow}>
-                      <span style={styles.exerciseBadge}>{res.sizeLabel}</span>
-                    </div>
-                    <div style={styles.exerciseTitle}>{res.name}</div>
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadResource(res.name)}
-                      style={{ ...styles.downloadButton }}
-                    >
-                      Download
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </main>
     </div>
   );
@@ -346,10 +303,6 @@ const styles = {
   exerciseTitle: { fontSize: '0.95rem', fontWeight: 700, color: '#1a1a1a' },
   exerciseDescriptionText: { fontSize: '0.8rem', color: '#777', lineHeight: 1.4 },
   emptyText: { color: '#888', fontSize: '0.9rem' },
-  downloadButton: {
-    alignSelf: 'flex-start', padding: '0.45rem 0.9rem', backgroundImage: `linear-gradient(135deg, ${NAVY}, ${NAVY_DARK})`,
-    color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-  },
 };
 
 export default CourseDescription;
