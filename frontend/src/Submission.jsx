@@ -341,8 +341,7 @@ function Submission() {
           <div style={styles.headerIcons}>
             <span style={styles.attemptCounter}>{attemptsUsed} attempt{attemptsUsed !== 1 ? 's' : ''} / {maxAttempts}</span>
             <NotificationBell />
-            <span style={styles.headerIconButton}><SettingsIcon /></span>
-            <span style={styles.avatarCircle} onClick={() => navigate('/profile/student')}>
+<span style={styles.headerIconButton} onClick={() => navigate('/settings')}><SettingsIcon /></span>            <span style={styles.avatarCircle} onClick={() => navigate('/profile/student')}>
               {loadingProfile ? '...' : getInitials()}
             </span>
           </div>

@@ -131,7 +131,7 @@ function InstructorProfile() {
           </div>
           <div style={styles.headerIcons}>
             <span style={styles.headerIconButton}><BellIcon /></span>
-            <span style={styles.headerIconButton}><SettingsIcon /></span>
+            <span style={styles.headerIconButton} onClick={() => navigate('/settings')}><SettingsIcon /></span>
             <span style={styles.avatarCircle}>
               {loadingProfile ? '...' : getInitials()}
             </span>

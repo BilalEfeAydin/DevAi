@@ -13,6 +13,7 @@ import InstructorCourseOverview from './InstructorCourseOverview';
 import RegisterCourse from './RegisterCourse';
 import CreateExercise from './CreateExercise';
 import Help from './Help';
+import Settings from './Settings';
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
         <Route path="*" element={<Navigate to="/login" replace />} />
         {/* Shared routes (any authenticated role) */}
 <Route path="/help" element={<AuthGuard allowedRoles={['student', 'instructor']}><Help /></AuthGuard>} /> 
+<Route path="/settings" element={<AuthGuard allowedRoles={['student', 'instructor']}><Settings /></AuthGuard>} />
       </Routes>
     </BrowserRouter>
   );

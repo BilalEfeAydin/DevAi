@@ -146,7 +146,7 @@ function CourseDescription() {
           </div>
           <div style={styles.headerIcons}>
             <NotificationBell />
-            <span style={styles.headerIconButton}><SettingsIcon /></span>
+           <span style={styles.headerIconButton} onClick={() => navigate('/settings')}><SettingsIcon /></span>
             <span style={styles.avatarCircle} onClick={() => navigate('/profile/student')}>
               {loadingProfile ? '...' : getInitials()}
             </span>

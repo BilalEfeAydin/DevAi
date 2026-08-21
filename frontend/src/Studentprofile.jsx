@@ -190,8 +190,7 @@ function StudentProfile() {
           </div>
           <div style={styles.headerIcons}>
             <NotificationBell />
-            <span style={styles.headerIconButton}><SettingsIcon /></span>
-            <span style={styles.avatarCircle}>
+<span style={styles.headerIconButton} onClick={() => navigate('/settings')}><SettingsIcon /></span>            <span style={styles.avatarCircle}>
               {loadingProfile ? '...' : getInitials()}
             </span>
           </div>
