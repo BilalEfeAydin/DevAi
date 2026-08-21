@@ -68,8 +68,7 @@ function CreateExercise() {
     { label: 'Overview', icon: <BookIcon />, active: false, disabled: false, onClick: () => navigate(`/instructor/course-dashboard`, { state: { courseId: effectiveCourseId, courseTitle: effectiveCourseTitle } }) },
     { label: 'Students', icon: <UserIcon />, active: false, disabled: false, onClick: () => navigate(`/instructor/course-dashboard`, { state: { courseId: effectiveCourseId, courseTitle: effectiveCourseTitle } }) },
     { label: 'Exercises', icon: <CapIcon />, active: true, disabled: false, onClick: () => navigate(`/instructor/course-dashboard`, { state: { courseId: effectiveCourseId, courseTitle: effectiveCourseTitle } }) },
-    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
-  ];
+{ label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },  ];
 
   const handleSubmit = (e) => {
     e.preventDefault();

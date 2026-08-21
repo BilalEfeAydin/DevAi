@@ -185,8 +185,7 @@ function InstructorCourseOverview() {
     { label: 'Overview', icon: <BookIcon />, active: view === 'overview', disabled: false, onClick: () => { setView('overview'); closeSidebar(); } },
     { label: 'Students', icon: <UserIcon />, active: view === 'students', disabled: false, onClick: () => { setView('students'); closeSidebar(); } },
     { label: 'Exercises', icon: <CapIcon />, active: view === 'exercises', disabled: false, onClick: () => { setView('exercises'); closeSidebar(); } },
-    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
-  ];
+{ label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },  ];
 
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 

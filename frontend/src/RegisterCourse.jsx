@@ -123,8 +123,7 @@ function RegisterCourse() {
 
   const navItems = [
     { label: 'Profile', icon: <UserIcon />, active: false, disabled: false, onClick: () => navigate('/profile/instructor') },
-    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
-  ];
+{ label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },  ];
 
   // Handlers for adding custom rules
   const addCustomNaming = () => {

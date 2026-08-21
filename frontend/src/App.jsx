@@ -12,6 +12,7 @@ import AcceptInvitation from './AcceptInvitation';
 import InstructorCourseOverview from './InstructorCourseOverview';
 import RegisterCourse from './RegisterCourse';
 import CreateExercise from './CreateExercise';
+import Help from './Help';
 
 function App() {
   return (
@@ -38,6 +39,8 @@ function App() {
         {/* Default */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Shared routes (any authenticated role) */}
+<Route path="/help" element={<AuthGuard allowedRoles={['student', 'instructor']}><Help /></AuthGuard>} /> 
       </Routes>
     </BrowserRouter>
   );

@@ -205,8 +205,7 @@ function Submission() {
       label: 'Exercises', icon: <CapIcon />, active: true, disabled: false,
       onClick: () => navigate('/course-description', { state: { courseId, courseTitle, initialView: 'exercises' } }),
     },
-    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
-  ];
+{ label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },  ];
 
   const handleRunTests = async (submitForReview = false) => {
     const mainFile = files.find((f) => f.id === 'main') || files[0];

@@ -137,8 +137,7 @@ function InstructorDashboard() {
   const navItems = [
     { label: 'Dashboard', icon: <ChartIcon />, active: true, disabled: false, onClick: undefined },
     { label: 'Profile', icon: <UserIcon />, active: false, disabled: false, onClick: () => navigate('/profile/instructor') },
-    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
-  ];
+{ label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },  ];
 
   // ---- Derived stats (all computed client-side from data already fetched) ----
   const totalCourses = courses.length;

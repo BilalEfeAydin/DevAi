@@ -128,8 +128,7 @@ function StudentProfile() {
   const navItems = [
     { label: 'Profile', icon: <UserIcon />, active: true, disabled: false, onClick: undefined },
     { label: 'My Courses', icon: <BookIcon />, active: false, disabled: false, onClick: () => navigate('/courses') },
-    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
-  ];
+{ label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },  ];
 
   const getInitials = () => {
     const first = firstName.charAt(0).toUpperCase();

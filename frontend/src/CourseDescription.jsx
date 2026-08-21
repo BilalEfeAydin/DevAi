@@ -104,7 +104,7 @@ function CourseDescription() {
       disabled: false,
       onClick: () => { setView('exercises'); closeSidebar(); },
     },
-    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
+    { label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },
   ];
 
   const handleSelectExercise = (exercise) => {
