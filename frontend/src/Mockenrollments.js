@@ -1,4 +1,6 @@
 // mockEnrollments.js
+import { addNotification } from './MockNotifications';
+
 // NOTE: in-memory mock "database" – resets on refresh.
 
 const courses = {
@@ -51,6 +53,117 @@ let invitations = [
 let invitationCounter = invitations.length;
 let courseCounter = 3; // start after c3
 
+// ============================================================
+// EXERCISE STORE (mock)
+// ============================================================
+// NOTE (flagged deliberately):
+// Exercise data is currently frontend-only mock data.
+// The Exercises API is not wired yet.
+// This store will later be replaced/connected to:
+//   GET /courses/:courseId/exercises
+//   POST /courses/:courseId/exercises
+//   PATCH /courses/:courseId/exercises/:exerciseId
+let exercises = {
+  c1: [
+    {
+      id: 'e1',
+      courseId: 'c1',
+      title: 'Variables & Data Types',
+      description: "Practice declaring variables and using Python's core data types.",
+      badge: 'Fundamentals',
+      maxAttempts: 5,
+      starterCode: '# Declare a variable named "age" and print it\n\n',
+    },
+    {
+      id: 'e2',
+      courseId: 'c1',
+      title: 'Loops & Conditionals',
+      description: 'Implement common loop and conditional patterns.',
+      badge: 'Control Flow',
+      maxAttempts: 5,
+      starterCode: '# Write a for loop that prints numbers 1 to 10\n\n',
+    },
+  ],
+  c2: [
+    {
+      id: 'e3',
+      courseId: 'c2',
+      title: 'Red-Black Tree Insertion',
+      description: 'Implement the self-balancing binary search tree insertion algorithm.',
+      badge: 'Algorithm Design',
+      maxAttempts: 5,
+      starterCode: 'class RedBlackTree:\n    def __init__(self):\n        self.NIL = Node(0, color="BLACK")\n        self.root = self.NIL\n\n    def insert(self, key):\n        # Your implementation here\n        pass\n',
+    },
+    {
+      id: 'e4',
+      courseId: 'c2',
+      title: 'Binary Search',
+      description: 'Implement binary search on a sorted array.',
+      badge: 'Algorithm Design',
+      maxAttempts: 5,
+      starterCode: 'def binary_search(arr, target):\n    # Your implementation here\n    pass\n',
+    },
+  ],
+  c3: [
+    {
+      id: 'e5',
+      courseId: 'c3',
+      title: 'Build a Nav Bar',
+      description: 'Create a responsive navigation bar.',
+      badge: 'HTML/CSS',
+      maxAttempts: 5,
+      starterCode: '<!-- Your HTML here -->\n',
+    },
+  ],
+};
+let exerciseCounter = 5; // after e5
+
+// ============================================================
+// EXERCISE FUNCTIONS
+// ============================================================
+
+export function getExercisesForCourse(courseId) {
+  return exercises[courseId] || [];
+}
+
+export function getExerciseById(exerciseId) {
+  for (const courseId in exercises) {
+    const ex = exercises[courseId].find((e) => e.id === exerciseId);
+    if (ex) return ex;
+  }
+  return null;
+}
+
+export function addExercise(courseId, exerciseData) {
+  if (!exercises[courseId]) exercises[courseId] = [];
+  exerciseCounter += 1;
+  const newExercise = {
+    id: `e${exerciseCounter}`,
+    courseId,
+    ...exerciseData,
+  };
+  exercises[courseId].push(newExercise);
+
+  // Notify all accepted students for this course
+  const acceptedInvites = invitations.filter(
+    (inv) => inv.courseId === courseId && inv.status === 'accepted' && inv.email
+  );
+  acceptedInvites.forEach((inv) => {
+    addNotification(inv.email, 'new_exercise', {
+      courseId,
+      courseTitle: courses[courseId]?.title || 'Course',
+      exerciseId: newExercise.id,
+      exerciseTitle: newExercise.title,
+    });
+  });
+
+  return newExercise;
+}
+
+// ============================================================
+// (existing functions below)
+// ============================================================
+
 function generateToken() {
   return `tok-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -61,7 +174,6 @@ function generateToken() {
 
 export function registerCourse(data) {
   const { title, description, instructorName, rules, honorCodeText } = data;
-  // generate new course id
   const id = `c${++courseCounter}`;
   const color = `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
   const newCourse = {
@@ -69,22 +181,11 @@ export function registerCourse(data) {
     title,
     instructor: instructorName || 'Instructor',
     color,
-    rules, // store the full rule config
-    // NOTE (flagged deliberately): mock only. Real HonorCodeDocURI (see
-    // DatabaseConstruct.java) is meant to hold an S3 URI, NOT raw text --
-    // DynamoDB items are capped at 400KB, and a syllabus/honor-code doc can
-    // exceed that as the course grows. The real flow: frontend uploads the
-    // raw file to honorCodeBucket (already provisioned in
-    // StorageConstruct.java, CORS-enabled for PUT) via a presigned URL, and
-    // ONLY the resulting S3 URI gets written to HonorCodeDocURI. That
-    // Lambda route (POST /courses/:id/honor-code-upload-url) doesn't exist
-    // yet -- ApiConstruct.java has zero routes for it. Storing the text
-    // here directly is a stopgap so the UI/UX is complete and testable.
+    rules,
     honorCodeText: honorCodeText || null,
   };
   courses[id] = newCourse;
 
-  // Also store courseDetails for the Overview tab
   courseDetails[id] = {
     description: description || 'No description provided.',
     notions: generateNotionsFromRules(rules),
@@ -92,24 +193,11 @@ export function registerCourse(data) {
     tips: ['Follow the course guidelines.', 'Read the Socratic questions carefully.', 'Review your past attempts.'],
   };
 
-  // default student access: pending until they accept
   studentCourseStatus[id] = 'pending';
 
   return newCourse;
 }
 
-// NOTE (flagged deliberately): generateNotionsFromRules / generateRulesFromRules
-// below produce DISPLAY-ONLY text for the Overview tab. None of this --
-// neither the structured `rules` object nor `honorCodeText` -- reaches
-// Bedrock. The AI review pipeline (postSubmission Lambda, see
-// ApiConstruct.java) still uses a hardcoded honor code string. Frontend has
-// nothing further to do here: it already sends `courseId` on every
-// submission (see Submission.jsx handleRunTests). Wiring this for real is a
-// BACKEND task: postSubmission must fetch Courses.HonorCodeDocURI (+ rules,
-// once a storage decision is made for those) by courseId and inject them
-// into the Bedrock prompt, replacing the hardcoded string.
-
-// Helper functions to convert rule config into display-friendly items
 function generateNotionsFromRules(rules) {
   const notions = [];
   if (rules.naming.camelCase || rules.naming.PascalCase || rules.naming.UPPER_CASE || rules.naming.custom.length) {
@@ -238,6 +326,15 @@ export function sendInvitationByEmail(courseId, email) {
     createdAt: new Date().toISOString(),
   };
   invitations.push(newInvite);
+
+  // Add notification for the invited student
+  addNotification(email, 'invitation', {
+    courseId,
+    courseTitle: courses[courseId]?.title || 'Course',
+    instructorName: courses[courseId]?.instructor || 'Instructor',
+    token: newInvite.token,
+  });
+
   return newInvite;
 }
 

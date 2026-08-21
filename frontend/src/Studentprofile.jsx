@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { fetchUserAttributes, signOut } from 'aws-amplify/auth';
 import { NAVY } from './Theme';
 import Sidebar from './Sidebar';
+import NotificationBell from './NotificationBell';
 import {
   UserIcon, BookIcon, CapIcon, BellIcon,
   HelpIcon, MailIcon,
   MenuIcon, SettingsIcon
 } from './Icons';
 
-// Styles CSS pour les cartes (le sidebar a son propre CSS dans Sidebar.jsx)
 const hoverCSS = `
   .infoCard {
     transition: box-shadow 0.15s ease, transform 0.15s ease;
@@ -64,21 +64,18 @@ function StudentProfile() {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
 
-  // Navigation : Profile (actif), My Courses (lie vers /courses), Help
   const navItems = [
     { label: 'Profile', icon: <UserIcon />, active: true, disabled: false, onClick: undefined },
     { label: 'My Courses', icon: <BookIcon />, active: false, disabled: false, onClick: () => navigate('/courses') },
     { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
   ];
 
-  // Statistiques (inchangées)
   const stats = [
     { label: 'Enrolled Courses', value: '3 Courses', icon: <BookIcon /> },
     { label: 'Completed Exercises', value: '42 Exercises', icon: <CapIcon /> },
     { label: 'Avg Solution Attempts', value: '1.8 Attempts', icon: <CapIcon /> },
   ];
 
-  // Cartes d'information
   const infoCards = [
     {
       id: 'role',
@@ -104,7 +101,6 @@ function StudentProfile() {
     },
   ];
 
-  // Génération des initiales (ex: "LR")
   const getInitials = () => {
     const first = firstName.charAt(0).toUpperCase();
     const last = lastName.charAt(0).toUpperCase();
@@ -123,7 +119,6 @@ function StudentProfile() {
         onLogout={handleLogout}
       />
 
-      {/* Contenu principal */}
       <main style={styles.main}>
         <header style={styles.header}>
           <div style={styles.headerLeft}>
@@ -133,7 +128,7 @@ function StudentProfile() {
             <h1 style={styles.pageTitle}>My Profile</h1>
           </div>
           <div style={styles.headerIcons}>
-            <span style={styles.headerIconButton}><BellIcon /></span>
+            <NotificationBell />
             <span style={styles.headerIconButton}><SettingsIcon /></span>
             <span style={styles.avatarCircle}>
               {loadingProfile ? '...' : getInitials()}
@@ -141,7 +136,6 @@ function StudentProfile() {
           </div>
         </header>
 
-        {/* Carte de profil */}
         <div style={styles.profileCard}>
           <span style={styles.profileAvatar}>
             {loadingProfile ? '...' : getInitials()}
@@ -156,7 +150,6 @@ function StudentProfile() {
           </div>
         </div>
 
-        {/* Statistiques */}
         <div style={styles.statsRow}>
           {stats.map((stat) => (
             <div key={stat.label} style={styles.statCard}>
@@ -169,7 +162,6 @@ function StudentProfile() {
           ))}
         </div>
 
-        {/* Cartes d'information */}
         <h3 style={styles.sectionTitle}>Information</h3>
         <div style={styles.infoGrid}>
           {infoCards.map((card) => (
@@ -192,7 +184,6 @@ function StudentProfile() {
   );
 }
 
-// Styles (sidebar retiré -- vit maintenant dans Sidebar.jsx)
 const styles = {
   page: {
     minHeight: '100vh',

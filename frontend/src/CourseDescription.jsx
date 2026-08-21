@@ -3,13 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
 import { NAVY, NAVY_DARK } from './Theme';
 import Sidebar from './Sidebar';
+import NotificationBell from './NotificationBell';
 import {
   BookIcon, CapIcon, BellIcon,
   HelpIcon, MenuIcon, SettingsIcon, ArrowIcon
 } from './Icons';
 import { getCourseDetails } from './Mockenrollments';
 
-// Mock exercises (unchanged)
 const exercisesByCourse = {
   c1: [
     { id: 'e1', title: 'Variables & Data Types', badge: 'Fundamentals', description: "Practice declaring variables and using Python's core data types.", maxAttempts: 5, starterCode: '# Declare a variable named "age" and print it\n\n' },
@@ -42,7 +42,7 @@ function CourseDescription() {
   const courseTitle = location.state?.courseTitle || 'Course';
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [view, setView] = useState('course'); // 'course' | 'exercises'
+  const [view, setView] = useState('course');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -63,7 +63,6 @@ function CourseDescription() {
     loadProfile();
   }, []);
 
-  // Fetch course details from mock store
   useEffect(() => {
     if (courseId) {
       const details = getCourseDetails(courseId);
@@ -146,7 +145,7 @@ function CourseDescription() {
             </h1>
           </div>
           <div style={styles.headerIcons}>
-            <span style={styles.headerIconButton}><BellIcon /></span>
+            <NotificationBell />
             <span style={styles.headerIconButton}><SettingsIcon /></span>
             <span style={styles.avatarCircle} onClick={() => navigate('/profile/student')}>
               {loadingProfile ? '...' : getInitials()}
@@ -156,13 +155,11 @@ function CourseDescription() {
 
         {view === 'course' && (
           <div style={styles.overviewContainer}>
-            {/* Course title and meta */}
             <div style={styles.courseHeader}>
               <h2 style={styles.courseTitle}>{courseTitle}</h2>
               <p style={styles.courseMeta}>Instructor: coming soon</p>
             </div>
 
-            {/* Description */}
             <section style={styles.card}>
               <h3 style={styles.cardTitle}>Course Description</h3>
               <p style={styles.cardText}>
@@ -170,7 +167,6 @@ function CourseDescription() {
               </p>
             </section>
 
-            {/* Notions */}
             <section style={styles.card}>
               <h3 style={styles.cardTitle}>Notions to Acquire</h3>
               {courseDetails?.notions?.length ? (
@@ -184,7 +180,6 @@ function CourseDescription() {
               )}
             </section>
 
-            {/* Rules */}
             <section style={styles.card}>
               <h3 style={styles.cardTitle}>General Rules</h3>
               {courseDetails?.rules?.length ? (
@@ -198,7 +193,6 @@ function CourseDescription() {
               )}
             </section>
 
-            {/* Tips */}
             <section style={styles.card}>
               <h3 style={styles.cardTitle}>Tips to Succeed</h3>
               {courseDetails?.tips?.length ? (
@@ -259,7 +253,6 @@ const styles = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
   },
 
-  // Course overview styles (aligned with InstructorCourseOverview)
   overviewContainer: { display: 'flex', flexDirection: 'column', gap: '1.2rem' },
   courseHeader: { marginBottom: '0.2rem' },
   courseTitle: { color: '#1a1a1a', fontSize: '1.4rem', fontWeight: 800, margin: 0 },
@@ -276,7 +269,6 @@ const styles = {
   list: { margin: '0.6rem 0 0', paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' },
   listItem: { fontSize: '0.88rem', color: '#444', lineHeight: 1.5 },
 
-  // Exercises list (unchanged styling)
   exerciseContainer: { display: 'flex', flexDirection: 'column', gap: '1rem' },
   exerciseSectionTitle: { fontSize: '1.2rem', fontWeight: 700, color: '#1a1a1a', margin: 0 },
   exerciseGrid: { display: 'flex', flexDirection: 'column', gap: '0.8rem' },

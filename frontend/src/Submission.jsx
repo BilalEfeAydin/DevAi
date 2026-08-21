@@ -7,16 +7,12 @@ import { python } from '@codemirror/lang-python';
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
 import { NAVY } from './Theme';
 import Sidebar from './Sidebar';
+import NotificationBell from './NotificationBell';
 import {
   BookIcon, CapIcon, BellIcon, HelpIcon,
   MenuIcon, SettingsIcon, PlusIcon,
 } from './Icons';
 
-// TODO: only Python has real syntax highlighting for now (only @codemirror/lang-python
-// is installed). Files with other extensions render as plain text -- no coloring --
-// rather than being wrongly colored as Python. Add @codemirror/lang-html,
-// @codemirror/lang-css, @codemirror/lang-javascript here once the team confirms
-// which languages exercises actually need.
 const getLanguageExtension = (filename) => {
   if (filename.endsWith('.py')) return [python()];
   return [];
@@ -41,23 +37,11 @@ function Submission() {
   const [lastName, setLastName] = useState('');
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [attemptsUsed, setAttemptsUsed] = useState(0);
-  const [output, setOutput] = useState(null); // { status: 'running'|'placeholder', message: string }
-  const [aiReview, setAiReview] = useState(null); // stores Bedrock review object
-
-  // MOCK: shape matches what the Bedrock Socratic-review Lambda is expected
-  // to return once Sprint 3's "Wire Bedrock into Lambda pipeline" is done.
-  // Replace generateMockFeedback() with the real API response when ready.
-  // NOTE: this is the feedback for the LIVE/current attempt only. Past
-  // attempts keep their own frozen feedback inside attemptHistory (see below).
+  const [output, setOutput] = useState(null);
+  const [aiReview, setAiReview] = useState(null);
   const [aiFeedback, setAiFeedback] = useState(null);
-
-  // attempt history , each entry is a FROZEN snapshot of files + feedback
-  // taken at the moment "Run & Submit" was clicked. This is what lets the
-  // student scroll back through past attempts. Replace with a real fetch from
-  // the Submissions table (StudentIndex GSI, sorted by CreatedAt) once that
-  // backend piece exists — the shape below should stay compatible.
   const [attemptHistory, setAttemptHistory] = useState([]);
-  const [viewingAttemptNumber, setViewingAttemptNumber] = useState(null); // null = viewing the live/current attempt
+  const [viewingAttemptNumber, setViewingAttemptNumber] = useState(null);
 
   const [files, setFiles] = useState([
     { id: 'main', name: 'main.py', content: starterCode },
@@ -67,17 +51,11 @@ function Submission() {
   const [newFileName, setNewFileName] = useState('');
   const [fileNameError, setFileNameError] = useState('');
 
-  // Which attempt are we looking at? null = the live, editable attempt.
   const viewingSnapshot = viewingAttemptNumber !== null
     ? attemptHistory.find((a) => a.attemptNumber === viewingAttemptNumber)
     : null;
   const isViewingPast = viewingSnapshot !== null;
 
-  // Files/feedback actually shown depend on whether we're viewing history or the live attempt.
-  // EVERYTHING in the JSX below must read from these two (displayedFiles /
-  // displayedFeedback), never directly from `files` or `aiFeedback` --
-  // otherwise the tabs/history UI silently shows live data while looking
-  // like it's showing a past attempt.
   const displayedFiles = isViewingPast ? viewingSnapshot.files : files;
   const displayedFeedback = isViewingPast ? viewingSnapshot.feedback : aiFeedback;
   const displayedReview = isViewingPast ? viewingSnapshot.feedback : aiReview;
@@ -98,7 +76,6 @@ function Submission() {
     loadProfile();
   }, []);
 
-  // Fetch past submissions on mount to restore attempt count, AI review, and history
   useEffect(() => {
     async function loadPastSubmissions() {
       try {
@@ -115,7 +92,6 @@ function Submission() {
 
         const items = await res.json();
 
-        // Filter to only this course's submissions and sort newest first
         const cid = courseId || 'test-course';
         const eid = exerciseId || 'default';
         const courseSubmissions = items
@@ -124,16 +100,13 @@ function Submission() {
 
         if (courseSubmissions.length === 0) return;
 
-        // Restore attempt count
         setAttemptsUsed(courseSubmissions.length);
 
-        // Restore the most recent AI review
         const latestWithReview = courseSubmissions.find((s) => s.aiReview);
         if (latestWithReview?.aiReview) {
           setAiReview(latestWithReview.aiReview);
         }
 
-        // Rebuild attempt history (oldest first for display)
         const history = courseSubmissions
           .slice()
           .reverse()
@@ -181,12 +154,11 @@ function Submission() {
   ];
 
   const handleRunTests = async (submitForReview = false) => {
-    // Collect all file contents into a single string (main file first)
     const mainFile = files.find((f) => f.id === 'main') || files[0];
     const code = mainFile.content;
 
     setOutput({ status: 'running', message: 'Running your code...' });
-    if (!submitForReview) setAiReview(null); // only clear review on plain Run Tests
+    if (!submitForReview) setAiReview(null);
 
     try {
       const session = await fetchAuthSession();
@@ -214,7 +186,6 @@ function Submission() {
         return;
       }
 
-      // Build output from E2B execution results
       const exec = data.execution || {};
       setOutput({
         status: exec.executionStatus || 'passed',
@@ -223,7 +194,6 @@ function Submission() {
         error: exec.error || null,
       });
 
-      // Capture AI review if present
       if (data.aiReview) {
         setAiReview(data.aiReview);
       }
@@ -240,7 +210,7 @@ function Submission() {
   };
 
   const handleCodeChange = (value) => {
-    if (isViewingPast) return; // safety net -- editor is readOnly, but block writes at the state level too
+    if (isViewingPast) return;
     setFiles((prev) =>
       prev.map((f) => (f.id === activeFileId ? { ...f, content: value } : f))
     );
@@ -283,7 +253,7 @@ function Submission() {
   };
 
   const handleCloseFile = (fileId, event) => {
-    event.stopPropagation(); // don't switch tabs when clicking the X
+    event.stopPropagation();
     if (isViewingPast) return;
     if (files.length === 1) {
       alert('You need at least one file open.');
@@ -316,7 +286,7 @@ function Submission() {
           </div>
           <div style={styles.headerIcons}>
             <span style={styles.attemptCounter}>{attemptsUsed} attempt{attemptsUsed !== 1 ? 's' : ''} / {maxAttempts}</span>
-            <span style={styles.headerIconButton}><BellIcon /></span>
+            <NotificationBell />
             <span style={styles.headerIconButton}><SettingsIcon /></span>
             <span style={styles.avatarCircle} onClick={() => navigate('/profile/student')}>
               {loadingProfile ? '...' : getInitials()}

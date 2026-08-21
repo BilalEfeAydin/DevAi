@@ -11,6 +11,7 @@ import CourseDescription from './CourseDescription';
 import AcceptInvitation from './AcceptInvitation';
 import InstructorCourseOverview from './InstructorCourseOverview';
 import RegisterCourse from './RegisterCourse';
+import CreateExercise from './CreateExercise';
 
 function App() {
   return (
@@ -32,8 +33,9 @@ function App() {
         <Route path="/instructor/dashboard" element={<AuthGuard allowedRoles={['instructor']}><InstructorDashboard /></AuthGuard>} />
         <Route path="/instructor/course-dashboard" element={<AuthGuard allowedRoles={['instructor']}><InstructorCourseOverview /></AuthGuard>} />
         <Route path="/register-course" element={<AuthGuard allowedRoles={['instructor']}><RegisterCourse /></AuthGuard>} />
+        <Route path="/instructor/course/exercises/create" element={<AuthGuard allowedRoles={['instructor']}><CreateExercise /></AuthGuard>} />
 
-        {/* Default route: anyone landing on "/" goes to login for now */}
+        {/* Default */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
