@@ -119,7 +119,7 @@ function NotificationBell() {
     });
   };
 
-  // Manual refresh
+  // Refresh : recharge les notifications depuis le mock (ou plus tard depuis l'API)
   const refreshNotifications = () => {
     if (email) {
       const notifs = getNotificationsForStudent(email);
@@ -145,7 +145,21 @@ function NotificationBell() {
         <div style={styles.dropdown}>
           <div style={{ padding: '0.5rem 1rem', borderBottom: '1px solid #e7eaf5', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Notifications</span>
-            <button onClick={refreshNotifications} style={{ background: 'none', border: 'none', color: NAVY, cursor: 'pointer', fontSize: '0.75rem' }}>
+            <button 
+              onClick={refreshNotifications} 
+              style={{ 
+                background: 'none', 
+                border: 'none', 
+                color: NAVY, 
+                cursor: 'pointer', 
+                fontSize: '0.75rem',
+                padding: '0.2rem 0.5rem',
+                borderRadius: '4px',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f2ff'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
               ↻ Refresh
             </button>
           </div>

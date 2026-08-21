@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { signOut, fetchUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
 import { API_BASE_URL } from './amplifyConfig';
@@ -9,7 +9,7 @@ import { NAVY } from './Theme';
 import Sidebar from './Sidebar';
 import NotificationBell from './NotificationBell';
 import {
-  BookIcon, CapIcon, BellIcon, HelpIcon,
+  BookIcon, CapIcon, HelpIcon,
   MenuIcon, SettingsIcon, PlusIcon,
 } from './Icons';
 
@@ -50,6 +50,9 @@ function Submission() {
   const [isAddingFile, setIsAddingFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [fileNameError, setFileNameError] = useState('');
+
+  // Référence pour l'élément contenant l'éditeur CodeMirror
+  const editorContainerRef = useRef(null);
 
   const viewingSnapshot = viewingAttemptNumber !== null
     ? attemptHistory.find((a) => a.attemptNumber === viewingAttemptNumber)
@@ -123,6 +126,58 @@ function Submission() {
     }
     loadPastSubmissions();
   }, [courseId, exerciseId]);
+
+  // Protections anti-copie/coller dans l'éditeur
+  useEffect(() => {
+    if (isViewingPast) return; // On autorise la copie pour les tentatives passées
+
+    const container = editorContainerRef.current;
+    if (!container) return;
+
+    // Fonctions de blocage
+    const blockEvent = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+
+    // Blocage du clic droit (menu contextuel)
+    const blockContextMenu = (e) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // Blocage des raccourcis clavier de copier/coller/couper
+    const blockKeyboardShortcuts = (e) => {
+      const ctrlKey = e.ctrlKey || e.metaKey;
+      if (ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'v' || e.key === 'V' || e.key === 'x' || e.key === 'X')) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      // Bloquer aussi Ctrl+Shift+I, Ctrl+Shift+J, F12 (ouvrir console)
+      if (e.key === 'F12' || (ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    };
+
+    // Ajouter les écouteurs sur l'élément conteneur et ses descendants (CodeMirror)
+    container.addEventListener('contextmenu', blockContextMenu, true);
+    container.addEventListener('copy', blockEvent, true);
+    container.addEventListener('paste', blockEvent, true);
+    container.addEventListener('cut', blockEvent, true);
+    document.addEventListener('keydown', blockKeyboardShortcuts, true);
+
+    return () => {
+      container.removeEventListener('contextmenu', blockContextMenu, true);
+      container.removeEventListener('copy', blockEvent, true);
+      container.removeEventListener('paste', blockEvent, true);
+      container.removeEventListener('cut', blockEvent, true);
+      document.removeEventListener('keydown', blockKeyboardShortcuts, true);
+    };
+  }, [isViewingPast]);
 
   const getInitials = () => {
     const first = firstName.charAt(0).toUpperCase();
@@ -368,15 +423,20 @@ function Submission() {
               </span>
             </div>
 
-            <CodeMirror
-              value={activeFile.content}
-              height="480px"
-              theme={vscodeDark}
-              extensions={getLanguageExtension(activeFile.name)}
-              onChange={handleCodeChange}
-              readOnly={isViewingPast}
-              style={styles.codeMirrorWrap}
-            />
+            {/* Conteneur de l'éditeur avec les protections */}
+            <div ref={editorContainerRef}>
+              <CodeMirror
+                value={activeFile.content}
+                height="480px"
+                theme={vscodeDark}
+                extensions={getLanguageExtension(activeFile.name)}
+                onChange={handleCodeChange}
+                readOnly={isViewingPast}
+                style={styles.codeMirrorWrap}
+                // Désactiver le copier-coller via les options de CodeMirror si possible
+                // mais nous utilisons déjà des écouteurs d'événements
+              />
+            </div>
 
             <div style={styles.outputPanel}>
               <div style={styles.outputPanelHeader}>Output</div>
