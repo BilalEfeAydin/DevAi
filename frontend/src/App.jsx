@@ -9,7 +9,7 @@ import CoursePicker from './CoursePicker';
 import Submission from './Submission';
 import CourseDescription from './CourseDescription';
 import AcceptInvitation from './AcceptInvitation';
-import InstructorCourseOverview from './InstructorCourseOverview';
+import InstructorCourseOverview from './Instructorcourseoverview';
 import RegisterCourse from './RegisterCourse';
 import CreateExercise from './CreateExercise';
 import Help from './Help';

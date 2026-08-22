@@ -12,6 +12,18 @@ import {
   sendInvitationByEmail, generateShareableLink,
   getExercisesForCourse,
 } from './Mockenrollments';
+import {
+  getResourcesForCourse, addResource, deleteResource,
+} from './Mockresources';
+
+
+// NOTE (flagged deliberately): falls back to 'c1' only if no courseId was
+// passed via navigation state -- e.g. someone lands here directly by URL
+// during testing. The real entry point is Instructorprofile.jsx's
+// handleSelectCourse(), which already passes { courseId, courseTitle }
+// via location.state -- same pattern CourseDescription.jsx uses on the
+// student side.
+const FALLBACK_COURSE_ID = 'c1';
 
 const inviteCSS = `
   .inviteInput::placeholder {

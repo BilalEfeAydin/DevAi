@@ -9,7 +9,9 @@ import {
   FolderIcon, InboxIcon, ChartIcon,
   LockIcon, MailIcon,
 } from './Icons';
-import { registerCourse } from './Mockenrollments';
+import { fetchAuthSession } from 'aws-amplify/auth';
+
+const API_BASE_URL = 'https://lfass4s0ll.execute-api.us-east-1.amazonaws.com';
 
 // Color palette for sections
 const COLORS = {
@@ -81,6 +83,7 @@ function RegisterCourse() {
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -164,12 +167,6 @@ function RegisterCourse() {
     const file = e.target.files[0];
     if (file && file.type === 'text/plain') {
       setDocumentFile(file);
-      // NOTE (flagged deliberately): reading the file as text client-side so
-      // the mock has real content to show/test with. The REAL backend flow
-      // must NOT send this text in a request body to be stored as-is in
-      // DynamoDB (400KB item limit, and it's the wrong field for it per
-      // Courses.HonorCodeDocURI's naming). Real flow: PUT the raw file
-      // directly to S3 via a presigned URL, store only the resulting URI.
       const reader = new FileReader();
       reader.onload = (event) => setDocumentText(event.target.result || '');
       reader.onerror = () => setError('Could not read the file. Please try again.');
@@ -185,7 +182,7 @@ function RegisterCourse() {
   };
 
   // Submit
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -223,18 +220,37 @@ function RegisterCourse() {
       documentName: documentFile ? documentFile.name : 'No document uploaded',
     };
 
+    setSubmitting(true);
     try {
-      registerCourse({
-        title: title.trim(),
-        description: description.trim() || 'No description provided.',
-        instructorName: `${firstName} ${lastName}`.trim() || 'Instructor',
-        rules,
-        honorCodeText: documentText,
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken?.toString();
+
+      const res = await fetch(`${API_BASE_URL}/courses`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || 'No description provided.',
+          instructorName: `${firstName} ${lastName}`.trim() || 'Instructor',
+          rules,
+          honorCodeText: documentText || null,
+        }),
       });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || `Failed to create course (${res.status})`);
+      }
+
       setSuccess('Course registered successfully!');
       setTimeout(() => navigate('/profile/instructor'), 1500);
     } catch (err) {
       setError(err.message || 'Failed to register course.');
+    } finally {
+      setSubmitting(false);
     }
   };
 

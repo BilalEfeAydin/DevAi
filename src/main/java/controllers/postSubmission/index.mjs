@@ -82,7 +82,39 @@ async function fetchHonorCode(courseId) {
   }
 }
 
-// ── Build graduated system prompt based on attempt number ──────────
+// ── Fetch course-specific rules from S3 ─────────────────────────────
+async function fetchRules(courseId) {
+  try {
+    const courseRes = await ddb.send(new GetCommand({
+      TableName: COURSES_TABLE,
+      Key: { CourseID: courseId }
+    }));
+
+    if (!courseRes.Item || !courseRes.Item.RulesURI) {
+      console.log(`No custom rules URI found for course ${courseId}. Skipping rules injection.`);
+      return null;
+    }
+
+    const s3Uri = courseRes.Item.RulesURI;
+    const match = s3Uri.match(/^s3:\/\/([^\/]+)\/(.+)$/);
+    if (!match) {
+      console.warn(`Invalid S3 URI format for rules in course ${courseId}: ${s3Uri}.`);
+      return null;
+    }
+
+    const s3Res = await s3Client.send(new GetObjectCommand({
+      Bucket: match[1],
+      Key: match[2],
+    }));
+
+    const rulesText = await s3Res.Body.transformToString("utf-8");
+    return JSON.parse(rulesText);
+  } catch (err) {
+    console.warn(`Failed to fetch rules for course ${courseId}: ${err.message}. Proceeding without custom rules.`);
+    return null;
+  }
+}
+
 function buildSystemPrompt(attemptNumber, hasPreviousReview) {
   let hintLevel, hintInstructions;
 
@@ -203,7 +235,7 @@ async function fetchPreviousSubmission(studentId, courseId, assignmentId) {
 }
 
 // ── Call Bedrock AI for code review ───────────────────────────────
-async function reviewWithBedrock(code, attemptNumber, previousReview, honorCode) {
+async function reviewWithBedrock(code, attemptNumber, previousReview, honorCode, rules) {
   // Add line numbers to the code
   const numberedCode = code
     .split("\n")
@@ -232,6 +264,48 @@ ${honorCode}
 <student_code>
 ${numberedCode}
 </student_code>`;
+
+  // Inject instructor-defined rules if available
+  if (rules) {
+    let rulesBlock = "\n\n<instructor_rules>\nThe instructor has defined the following additional coding rules for this course. Enforce these rules in your review:\n";
+
+    if (rules.naming) {
+      const conventions = [];
+      if (rules.naming.camelCase) conventions.push("camelCase");
+      if (rules.naming.PascalCase) conventions.push("PascalCase");
+      if (rules.naming.UPPER_CASE) conventions.push("UPPER_CASE for constants");
+      if (rules.naming.custom?.length) conventions.push(...rules.naming.custom);
+      if (conventions.length) rulesBlock += `\n- Naming conventions: ${conventions.join(", ")}`;
+    }
+
+    if (rules.structure) {
+      if (rules.structure.functionLengthLimit) rulesBlock += `\n- Maximum function length: ${rules.structure.functionLengthLimit} lines`;
+      if (rules.structure.maxNestingLevels) rulesBlock += `\n- Maximum nesting depth: ${rules.structure.maxNestingLevels} levels`;
+    }
+
+    if (rules.complexity?.cyclomaticLimit) {
+      rulesBlock += `\n- Maximum cyclomatic complexity: ${rules.complexity.cyclomaticLimit}`;
+    }
+
+    if (rules.forbidden) {
+      const forbidden = [];
+      if (rules.forbidden.globalVariables) forbidden.push("global variables");
+      if (rules.forbidden.hardcodedSecrets) forbidden.push("hardcoded secrets/passwords");
+      if (rules.forbidden.custom?.length) forbidden.push(...rules.forbidden.custom);
+      if (forbidden.length) rulesBlock += `\n- Forbidden practices: ${forbidden.join(", ")}`;
+    }
+
+    if (rules.required) {
+      const required = [];
+      if (rules.required.docstrings) required.push("docstrings on all functions");
+      if (rules.required.unitTests) required.push("unit tests");
+      if (rules.required.custom?.length) required.push(...rules.required.custom);
+      if (required.length) rulesBlock += `\n- Required patterns: ${required.join(", ")}`;
+    }
+
+    rulesBlock += "\n</instructor_rules>";
+    userMessage += rulesBlock;
+  }
 
   if (previousReview) {
     userMessage += `\n\n<previous_review attempt="${previousReview.attemptNumber || attemptNumber - 1}">
@@ -368,7 +442,7 @@ export const handler = async (event) => {
     let sandbox;
     try {
       sandbox = await Sandbox.create();
-      const execution = await sandbox.runCode(content);
+      const execution = await sandbox.runCode(content, { timeoutMs: 10000 });
 
       // Capture stdout
       executionResult.stdout = execution.logs.stdout || [];
@@ -410,8 +484,11 @@ export const handler = async (event) => {
       attemptNumber = count + 1;
 
       try {
-        const honorCode = await fetchHonorCode(courseId);
-        aiReview = await reviewWithBedrock(content, attemptNumber, previousReview, honorCode);
+        const [honorCode, rules] = await Promise.all([
+          fetchHonorCode(courseId),
+          fetchRules(courseId),
+        ]);
+        aiReview = await reviewWithBedrock(content, attemptNumber, previousReview, honorCode, rules);
       } catch (bedrockErr) {
         console.error("Bedrock AI review error:", bedrockErr);
         aiReview = {

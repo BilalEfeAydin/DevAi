@@ -9,6 +9,7 @@ import {
   HelpIcon, MenuIcon, SettingsIcon, ArrowIcon
 } from './Icons';
 import { getCourseDetails } from './Mockenrollments';
+import { getResourcesForCourse } from './Mockresources';
 
 const exercisesByCourse = {
   c1: [
