@@ -56,7 +56,6 @@ const inviteCSS = `
   }
 `;
 
-const FALLBACK_COURSE_ID = 'c1';
 
 function InstructorCourseOverview() {
   const navigate = useNavigate();
