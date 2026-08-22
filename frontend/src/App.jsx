@@ -4,12 +4,16 @@ import Login from './Login';
 import AuthGuard from './AuthGuard';
 import StudentProfile from './Studentprofile';
 import InstructorProfile from './Instructorprofile';
+import InstructorDashboard from './InstructorDashboard';
 import CoursePicker from './CoursePicker';
 import Submission from './Submission';
 import CourseDescription from './CourseDescription';
 import AcceptInvitation from './AcceptInvitation';
 import InstructorCourseOverview from './Instructorcourseoverview';
 import RegisterCourse from './RegisterCourse';
+import CreateExercise from './CreateExercise';
+import Help from './Help';
+import Settings from './Settings';
 
 function App() {
   return (
@@ -28,12 +32,17 @@ function App() {
 
         {/* Instructor-only routes */}
         <Route path="/profile/instructor" element={<AuthGuard allowedRoles={['instructor']}><InstructorProfile /></AuthGuard>} />
+        <Route path="/instructor/dashboard" element={<AuthGuard allowedRoles={['instructor']}><InstructorDashboard /></AuthGuard>} />
         <Route path="/instructor/course-dashboard" element={<AuthGuard allowedRoles={['instructor']}><InstructorCourseOverview /></AuthGuard>} />
         <Route path="/register-course" element={<AuthGuard allowedRoles={['instructor']}><RegisterCourse /></AuthGuard>} />
+        <Route path="/instructor/course/exercises/create" element={<AuthGuard allowedRoles={['instructor']}><CreateExercise /></AuthGuard>} />
 
-        {/* Default route: anyone landing on "/" goes to login for now */}
+        {/* Default */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Shared routes (any authenticated role) */}
+<Route path="/help" element={<AuthGuard allowedRoles={['student', 'instructor']}><Help /></AuthGuard>} /> 
+<Route path="/settings" element={<AuthGuard allowedRoles={['student', 'instructor']}><Settings /></AuthGuard>} />
       </Routes>
     </BrowserRouter>
   );

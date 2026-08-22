@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
 import { NAVY, NAVY_DARK } from './Theme';
 import Sidebar from './Sidebar';
 import {
   BookIcon, CapIcon, BellIcon, HelpIcon,
-  MenuIcon, SettingsIcon, UserIcon, MailIcon, FolderIcon,
+  MenuIcon, SettingsIcon, UserIcon, MailIcon,
 } from './Icons';
 import {
   getCourseInfo, getCourseDetails, getInvitationsForCourse,
   sendInvitationByEmail, generateShareableLink,
+  getExercisesForCourse,
 } from './Mockenrollments';
 import {
   getResourcesForCourse, addResource, deleteResource,
@@ -24,10 +25,6 @@ import {
 // student side.
 const FALLBACK_COURSE_ID = 'c1';
 
-// Modern pill-style inputs need a real black placeholder, which inline
-// styles can't target (::placeholder isn't a real DOM state) -- hence
-// this tiny injected stylesheet, same pattern as hoverCSS elsewhere in
-// the project (CoursePicker.jsx, CourseDescription.jsx, etc.).
 const inviteCSS = `
   .inviteInput::placeholder {
     color: #1a1a1a;
@@ -44,14 +41,29 @@ const inviteCSS = `
     opacity: 0.6;
     cursor: not-allowed;
   }
+  .exerciseRow {
+    transition: background 0.15s ease;
+    cursor: default;
+  }
+  .exerciseRow:hover {
+    background: #f5f7ff;
+  }
+  .viewBtn {
+    transition: background 0.15s ease;
+  }
+  .viewBtn:hover {
+    background: #eef2ff;
+  }
 `;
+
+const FALLBACK_COURSE_ID = 'c1';
 
 function InstructorCourseOverview() {
   const navigate = useNavigate();
   const location = useLocation();
   const COURSE_ID = location.state?.courseId || FALLBACK_COURSE_ID;
 
-  const [view, setView] = useState('overview'); // 'overview' | 'students' | 'resources'
+  const [view, setView] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -61,19 +73,27 @@ function InstructorCourseOverview() {
   const details = getCourseDetails(COURSE_ID);
 
   const [invitations, setInvitations] = useState(() => getInvitationsForCourse(COURSE_ID));
-
   const [emailInput, setEmailInput] = useState('');
   const [emailError, setEmailError] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [confirmationMessage, setConfirmationMessage] = useState('');
-
   const [shareableLink, setShareableLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
 
-  // Resources tab state
-  const [resources, setResources] = useState(() => getResourcesForCourse(COURSE_ID));
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [exercises, setExercises] = useState(() => getExercisesForCourse(COURSE_ID));
+
+  // Popup state
+  const [viewingExercise, setViewingExercise] = useState(null);
+  const [buttonRect, setButtonRect] = useState(null);
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0, placement: 'above', arrowOffset: 0 });
+  const popupRef = useRef(null);
+
+  // Restore view from navigation state
+  useEffect(() => {
+    if (location.state?.initialView) {
+      setView(location.state.initialView);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     async function loadProfile() {
@@ -89,6 +109,72 @@ function InstructorCourseOverview() {
     }
     loadProfile();
   }, []);
+
+  // Click outside to close popup
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (popupRef.current && !popupRef.current.contains(event.target)) {
+        setViewingExercise(null);
+        setButtonRect(null);
+      }
+    }
+    if (viewingExercise) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [viewingExercise]);
+
+  // Recalculate popup position
+  useEffect(() => {
+    if (!viewingExercise || !buttonRect) return;
+
+    const updatePosition = () => {
+      const popup = popupRef.current;
+      if (!popup) return;
+      const popupWidth = popup.offsetWidth;
+      const popupHeight = popup.offsetHeight;
+      const gap = 12;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      // Vertical placement
+      const spaceAbove = buttonRect.top - gap;
+      const spaceBelow = viewportHeight - buttonRect.bottom - gap;
+      let top, placement;
+      if (spaceAbove >= popupHeight) {
+        top = buttonRect.top - popupHeight - gap;
+        placement = 'above';
+      } else if (spaceBelow >= popupHeight) {
+        top = buttonRect.bottom + gap;
+        placement = 'below';
+      } else {
+        top = (viewportHeight - popupHeight) / 2;
+        placement = 'center';
+      }
+
+      // Horizontal: try to center, but keep within viewport
+      const centerX = buttonRect.left + buttonRect.width / 2;
+      let left = centerX - popupWidth / 2;
+      const minLeft = 10;
+      const maxLeft = viewportWidth - popupWidth - 10;
+      if (left < minLeft) left = minLeft;
+      if (left > maxLeft) left = maxLeft;
+
+      // Arrow offset: distance from popup's left edge to the button's center
+      const arrowOffset = centerX - left;
+
+      setPopupPosition({ top, left, placement, arrowOffset });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [viewingExercise, buttonRect]);
 
   const getInitials = () => {
     const first = firstName.charAt(0).toUpperCase();
@@ -107,25 +193,11 @@ function InstructorCourseOverview() {
     }
   };
 
-  // NOTE (flagged deliberately):
-  // - 'Overview' = course description (title, notions, rules, tips).
-  //   Built now, on this page.
-  // - 'Students' = invite by email/link + invitation list. This is what
-  //   used to be called 'Overview' before the rename.
-  // - 'Resources' = docs/files instructor uploads so students can consult
-  //   them without copy-pasting a solution. Different from the honor code
-  //   (course-level policy doc, wired to Bedrock via postSubmission) and
-  //   different from per-exercise Rule Configuration -- see mockResources.js.
-  // - 'Exercises' will lead to exercise creation + Rule Configuration
-  //   (Naming Conventions / Forbidden Practices / etc. mockup) -- that's
-  //   its own task, not built yet.
   const navItems = [
     { label: 'Overview', icon: <BookIcon />, active: view === 'overview', disabled: false, onClick: () => { setView('overview'); closeSidebar(); } },
     { label: 'Students', icon: <UserIcon />, active: view === 'students', disabled: false, onClick: () => { setView('students'); closeSidebar(); } },
-    { label: 'Resources', icon: <FolderIcon />, active: view === 'resources', disabled: false, onClick: () => { setView('resources'); closeSidebar(); } },
-    { label: 'Exercises', icon: <CapIcon />, active: false, disabled: true, onClick: undefined },
-    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
-  ];
+    { label: 'Exercises', icon: <CapIcon />, active: view === 'exercises', disabled: false, onClick: () => { setView('exercises'); closeSidebar(); } },
+{ label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },  ];
 
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
@@ -150,10 +222,6 @@ function InstructorCourseOverview() {
 
     setSendingEmail(true);
     try {
-      // NOTE (flagged deliberately): this only creates the mock record --
-      // it does not actually send an email. Real version will call a
-      // Lambda (POST /courses/:id/invitations) that both writes the
-      // Enrollment record and sends the email via SES.
       sendInvitationByEmail(COURSE_ID, trimmed);
       setInvitations(getInvitationsForCourse(COURSE_ID));
       setConfirmationMessage(`Invitation sent to ${trimmed}`);
@@ -182,29 +250,21 @@ function InstructorCourseOverview() {
     }
   };
 
-  // --- Resources handlers ---
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    setSelectedFile(file || null);
+  const handleCreateExercise = () => {
+    navigate('/instructor/course/exercises/create', {
+      state: { courseId: COURSE_ID, courseTitle: course?.title || 'Course' },
+    });
   };
 
-  const handleUploadResource = () => {
-    if (!selectedFile) return;
-    setUploading(true);
-    // NOTE (flagged deliberately): no real upload happens here -- see
-    // mockResources.js. This just records the file's metadata so the
-    // UI/UX is complete and testable ahead of the real S3 + Lambda wiring
-    // (POST /courses/:id/resources, same pattern as the honor-code
-    // presigned-URL Lambda that's still pending).
-    addResource(COURSE_ID, selectedFile);
-    setResources(getResourcesForCourse(COURSE_ID));
-    setSelectedFile(null);
-    setUploading(false);
+  const handleViewExercise = (exercise, event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setButtonRect(rect);
+    setViewingExercise(exercise);
   };
 
-  const handleDeleteResource = (resourceId) => {
-    deleteResource(COURSE_ID, resourceId);
-    setResources(getResourcesForCourse(COURSE_ID));
+  const closePopup = () => {
+    setViewingExercise(null);
+    setButtonRect(null);
   };
 
   if (!course) {
@@ -239,23 +299,20 @@ function InstructorCourseOverview() {
           </div>
           <div style={styles.headerIcons}>
             <span style={styles.headerIconButton}><BellIcon /></span>
-            <span style={styles.headerIconButton}><SettingsIcon /></span>
+            <span style={styles.headerIconButton} onClick={() => navigate('/settings')}><SettingsIcon /></span>
             <span style={styles.avatarCircle} onClick={() => navigate('/profile/instructor')}>
               {loadingProfile ? '...' : getInitials()}
             </span>
           </div>
         </header>
 
-        {/* ============================================================ */}
-        {/* OVERVIEW VIEW                                                */}
-        {/* ============================================================ */}
+        {/* OVERVIEW */}
         {view === 'overview' && details && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
             <section style={styles.card}>
               <h2 style={styles.cardTitle}>Course Description</h2>
               <p style={styles.descriptionText}>{details.description}</p>
             </section>
-
             <section style={styles.card}>
               <h2 style={styles.cardTitle}>Notions to Acquire</h2>
               <ul style={styles.list}>
@@ -264,7 +321,6 @@ function InstructorCourseOverview() {
                 ))}
               </ul>
             </section>
-
             <section style={styles.card}>
               <h2 style={styles.cardTitle}>General Rules</h2>
               <ul style={styles.list}>
@@ -273,7 +329,6 @@ function InstructorCourseOverview() {
                 ))}
               </ul>
             </section>
-
             <section style={styles.card}>
               <h2 style={styles.cardTitle}>Tips to Succeed</h2>
               <ul style={styles.list}>
@@ -285,20 +340,15 @@ function InstructorCourseOverview() {
           </div>
         )}
 
-        {/* ============================================================ */}
-        {/* STUDENTS VIEW                                                */}
-        {/* ============================================================ */}
+        {/* STUDENTS */}
         {view === 'students' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-            {/* Invite Students -- modern aligned rows */}
             <section style={styles.card}>
               <h2 style={styles.cardTitle}>Invite Students</h2>
               <p style={styles.cardSubtitle}>
                 Invite students to <strong>{course.title}</strong> by email, or share a link they can use to join.
               </p>
-
               <div style={styles.inviteRowsWrap}>
-                {/* Row 1: shareable link */}
                 <div style={styles.inviteRow}>
                   <span style={styles.inviteRowLabel}>Shareable link</span>
                   <div style={styles.inviteRowControl}>
@@ -329,8 +379,6 @@ function InstructorCourseOverview() {
                     )}
                   </div>
                 </div>
-
-                {/* Row 2: email invite -- same height/shape as row 1 */}
                 <form onSubmit={handleSendEmailInvite} style={styles.inviteRow}>
                   <span style={styles.inviteRowLabel}>Invite by email</span>
                   <div style={styles.inviteRowControl}>
@@ -353,12 +401,9 @@ function InstructorCourseOverview() {
                   </div>
                 </form>
               </div>
-
               {emailError && <p style={styles.errorText}>{emailError}</p>}
               {confirmationMessage && <p style={styles.successText}>{confirmationMessage}</p>}
             </section>
-
-            {/* Invitations list */}
             <section style={styles.card}>
               <h2 style={styles.cardTitle}>Invitations</h2>
               {invitations.length === 0 ? (
@@ -373,11 +418,7 @@ function InstructorCourseOverview() {
                   {invitations.map((inv) => (
                     <div key={inv.id} style={styles.tableRow}>
                       <span style={{ ...styles.tableCell, flex: 2 }}>
-                        {inv.email ? (
-                          inv.email
-                        ) : (
-                          <span style={{ color: '#999', fontStyle: 'italic' }}>Awaiting student access</span>
-                        )}
+                        {inv.email ? inv.email : <span style={{ color: '#999', fontStyle: 'italic' }}>Awaiting student access</span>}
                       </span>
                       <span style={{ ...styles.tableCell, flex: 1 }}>
                         <span style={inv.status === 'accepted' ? styles.badgeAccepted : (inv.status === 'declined' ? styles.badgeDeclined : styles.badgePending)}>
@@ -395,57 +436,44 @@ function InstructorCourseOverview() {
           </div>
         )}
 
-        {/* ============================================================ */}
-        {/* RESOURCES VIEW                                               */}
-        {/* ============================================================ */}
-        {view === 'resources' && (
+        {/* EXERCISES */}
+        {view === 'exercises' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
             <section style={styles.card}>
-              <h2 style={styles.cardTitle}>Course Resources</h2>
-              <p style={styles.cardSubtitle}>
-                Upload documentation or reference files students can consult on their own -- e.g. a style
-                guide or a debugging checklist -- without copy-pasting a solution.
-              </p>
-
-              <div style={styles.uploadRow}>
-                <label style={styles.fileInputLabel}>
-                  {selectedFile ? selectedFile.name : 'Choose a file...'}
-                  <input type="file" onChange={handleFileSelect} style={{ display: 'none' }} />
-                </label>
-                <button
-                  type="button"
-                  onClick={handleUploadResource}
-                  disabled={!selectedFile || uploading}
-                  className="invitePillButton"
-                  style={styles.pillButtonPrimary}
-                >
-                  {uploading ? 'Uploading...' : 'Upload'}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 style={styles.cardTitle}>Exercises</h2>
+                <button type="button" onClick={handleCreateExercise} style={styles.createExerciseButton}>
+                  + Create Exercise
                 </button>
               </div>
-            </section>
-
-            <section style={styles.card}>
-              <h2 style={styles.cardTitle}>Uploaded Resources</h2>
-              {resources.length === 0 ? (
-                <p style={styles.emptyText}>No resources uploaded yet for this course.</p>
+              <p style={styles.cardSubtitle}>
+                Manage exercises for <strong>{course.title}</strong>. Exercises will be visible to students after they enroll.
+              </p>
+              {exercises.length === 0 ? (
+                <p style={styles.emptyText}>No exercises created yet. Click "Create Exercise" to add one.</p>
               ) : (
-                <div style={styles.table}>
-                  <div style={styles.tableHeaderRow}>
-                    <span style={{ ...styles.tableCell, flex: 2 }}>File</span>
-                    <span style={{ ...styles.tableCell, flex: 1 }}>Size</span>
-                    <span style={{ ...styles.tableCell, flex: 1.2 }}>Uploaded</span>
-                    <span style={{ ...styles.tableCell, flex: 0.6 }} />
+                <div style={styles.exerciseTable}>
+                  <div style={styles.exerciseTableHeader}>
+                    <span style={{ flex: 2 }}>Title</span>
+                    <span style={{ flex: 1 }}>Badge</span>
+                    <span style={{ flex: 0.8 }}>Max Attempts</span>
+                    <span style={{ flex: 0.6 }}>Actions</span>
                   </div>
-                  {resources.map((res) => (
-                    <div key={res.id} style={styles.tableRow}>
-                      <span style={{ ...styles.tableCell, flex: 2 }}>{res.name}</span>
-                      <span style={{ ...styles.tableCell, flex: 1, color: '#888' }}>{res.sizeLabel}</span>
-                      <span style={{ ...styles.tableCell, flex: 1.2, color: '#888', fontSize: '0.8rem' }}>
-                        {new Date(res.uploadedAt).toLocaleDateString()}
+                  {exercises.map((ex) => (
+                    <div key={ex.id} className="exerciseRow" style={styles.exerciseRow}>
+                      <span style={{ flex: 2, fontWeight: 600 }}>{ex.title}</span>
+                      <span style={{ flex: 1 }}>
+                        <span style={styles.exerciseBadge}>{ex.badge || 'General'}</span>
                       </span>
-                      <span style={{ ...styles.tableCell, flex: 0.6 }}>
-                        <button type="button" onClick={() => handleDeleteResource(res.id)} style={styles.deleteButton}>
-                          Remove
+                      <span style={{ flex: 0.8 }}>{ex.maxAttempts}</span>
+                      <span style={{ flex: 0.6 }}>
+                        <button
+                          type="button"
+                          className="viewBtn"
+                          onClick={(e) => handleViewExercise(ex, e)}
+                          style={styles.viewExerciseButton}
+                        >
+                          View
                         </button>
                       </span>
                     </div>
@@ -456,6 +484,83 @@ function InstructorCourseOverview() {
           </div>
         )}
       </main>
+
+      {/* POPUP */}
+      {viewingExercise && buttonRect && (
+        <div
+          ref={popupRef}
+          style={{
+            position: 'fixed',
+            left: popupPosition.left,
+            top: popupPosition.top,
+            zIndex: 2000,
+            backgroundColor: '#fff',
+            borderRadius: '12px',
+            boxShadow: '0 8px 30px rgba(30,42,120,0.2)',
+            border: `1px solid ${NAVY}`,
+            padding: '1.2rem 1.5rem',
+            maxWidth: '400px',
+            width: 'max-content',
+            textAlign: 'left',
+            transition: 'opacity 0.15s ease',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              left: popupPosition.arrowOffset,
+              transform: 'translateX(-50%)',
+              top: popupPosition.placement === 'above' ? '100%' : 'auto',
+              bottom: popupPosition.placement === 'below' ? '100%' : 'auto',
+              width: 0,
+              height: 0,
+              borderLeft: '8px solid transparent',
+              borderRight: '8px solid transparent',
+              borderTop: popupPosition.placement === 'above' ? `8px solid ${NAVY}` : 'none',
+              borderBottom: popupPosition.placement === 'below' ? `8px solid ${NAVY}` : 'none',
+              marginTop: popupPosition.placement === 'above' ? '-1px' : 0,
+              marginBottom: popupPosition.placement === 'below' ? '-1px' : 0,
+            }}
+          />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <h3 style={{ margin: 0, fontSize: '1rem', color: NAVY }}>{viewingExercise.title}</h3>
+            <button
+              onClick={closePopup}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '1.2rem',
+                cursor: 'pointer',
+                color: '#888',
+                padding: '0 0 0 0.8rem',
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#333' }}>
+            <p><strong>Description:</strong> {viewingExercise.description}</p>
+            <p><strong>Badge:</strong> {viewingExercise.badge || 'General'}</p>
+            <p><strong>Max Attempts:</strong> {viewingExercise.maxAttempts}</p>
+            <p><strong>Starter Code:</strong></p>
+            <pre style={{
+              background: '#f5f7fb',
+              padding: '0.6rem',
+              borderRadius: '6px',
+              fontSize: '0.75rem',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+              maxHeight: '120px',
+              overflow: 'auto',
+              border: '1px solid #e7eaf5',
+            }}>
+              {viewingExercise.starterCode || '(none provided)'}
+            </pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -484,7 +589,6 @@ const styles = {
   list: { margin: '0.6rem 0 0', paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' },
   listItem: { fontSize: '0.88rem', color: '#444', lineHeight: 1.5 },
 
-  // --- Modern aligned invite rows (Classroom/Moodle-style pills) ---
   inviteRowsWrap: { display: 'flex', flexDirection: 'column', gap: '0.9rem', marginTop: '0.4rem' },
   inviteRow: {
     display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
@@ -541,15 +645,34 @@ const styles = {
     padding: '0.2rem 0.6rem', borderRadius: '999px', textTransform: 'capitalize',
   },
 
-  // --- Resources tab ---
-  uploadRow: { display: 'flex', gap: '0.8rem', alignItems: 'center', marginTop: '0.4rem', flexWrap: 'wrap' },
-  fileInputLabel: {
-    flex: 1, minWidth: '220px', height: '44px', padding: '0 1rem', borderRadius: '999px',
-    border: '1px dashed #d7dce8', fontSize: '0.85rem', color: '#555',
-    backgroundColor: '#f7f8fc', display: 'flex', alignItems: 'center', cursor: 'pointer',
+  exerciseTable: { display: 'flex', flexDirection: 'column', marginTop: '0.5rem' },
+  exerciseTableHeader: {
+    display: 'flex', padding: '0.5rem 0.3rem', borderBottom: '1px solid #e7eaf5',
+    fontSize: '0.72rem', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.03em',
   },
-  deleteButton: {
-    background: 'none', border: 'none', color: '#c00', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', padding: 0,
+  exerciseRow: {
+    display: 'flex', alignItems: 'center', padding: '0.7rem 0.3rem',
+    borderBottom: '1px solid #f0f1f6', fontSize: '0.85rem', color: '#333',
+  },
+  exerciseBadge: {
+    display: 'inline-block',
+    fontSize: '0.7rem', fontWeight: 700, color: '#7c3aed', backgroundColor: '#f3ecff',
+    padding: '0.2rem 0.6rem', borderRadius: '999px',
+  },
+  createExerciseButton: {
+    display: 'flex', alignItems: 'center', gap: '0.4rem',
+    padding: '0.5rem 1.2rem', borderRadius: '8px', border: `1px solid ${NAVY}`,
+    backgroundColor: 'transparent', color: NAVY, fontSize: '0.85rem', fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'background 0.15s',
+    ':hover': { backgroundColor: 'rgba(30,42,120,0.05)' },
+  },
+  viewExerciseButton: {
+    padding: '0.2rem 0.8rem', borderRadius: '6px', border: '1px solid #d7dce8',
+    backgroundColor: '#fff', color: '#555', fontSize: '0.75rem', fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'background 0.15s',
+    ':hover': { backgroundColor: '#f5f5f5' },
   },
 };
 

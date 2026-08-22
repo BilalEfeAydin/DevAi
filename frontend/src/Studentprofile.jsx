@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchUserAttributes, signOut } from 'aws-amplify/auth';
+import { fetchUserAttributes, signOut, fetchAuthSession } from 'aws-amplify/auth';
 import { NAVY } from './Theme';
 import Sidebar from './Sidebar';
+import NotificationBell from './NotificationBell';
 import {
-  UserIcon, BookIcon, CapIcon, BellIcon,
+  UserIcon, BookIcon, CapIcon,
   HelpIcon, MailIcon,
   MenuIcon, SettingsIcon
 } from './Icons';
 
-// Styles CSS pour les cartes (le sidebar a son propre CSS dans Sidebar.jsx)
+const API_BASE_URL = 'https://lfass4s0ll.execute-api.us-east-1.amazonaws.com';
+
 const hoverCSS = `
   .infoCard {
     transition: box-shadow 0.15s ease, transform 0.15s ease;
@@ -32,8 +34,16 @@ function StudentProfile() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [loadingProfile, setLoadingProfile] = useState(true);
+
+  // Stats réelles
+  const [enrolledCoursesCount, setEnrolledCoursesCount] = useState(null);
+  const [completedExercisesCount, setCompletedExercisesCount] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState('');
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Chargement du profil
   useEffect(() => {
     async function loadProfile() {
       try {
@@ -53,6 +63,57 @@ function StudentProfile() {
     loadProfile();
   }, []);
 
+  // Chargement des statistiques réelles
+  useEffect(() => {
+    async function loadStats() {
+      setLoadingStats(true);
+      setStatsError('');
+      try {
+        const session = await fetchAuthSession();
+        const token = session.tokens?.idToken?.toString();
+        const studentId = session.tokens?.idToken?.payload?.sub;
+        if (!studentId) {
+          setStatsError('Unable to identify student.');
+          setLoadingStats(false);
+          return;
+        }
+
+        // Récupération des cours
+        const coursesRes = await fetch(
+          `${API_BASE_URL}/courses?studentId=${studentId}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        if (!coursesRes.ok) throw new Error('Failed to fetch courses.');
+        const coursesData = await coursesRes.json();
+        setEnrolledCoursesCount(coursesData.length || 0);
+
+        // Récupération des soumissions
+        const submissionsRes = await fetch(
+          `${API_BASE_URL}/submissions?studentId=${studentId}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        if (!submissionsRes.ok) throw new Error('Failed to fetch submissions.');
+        const submissionsData = await submissionsRes.json();
+
+        // Compter les exercices uniques soumis (distincts par AssignmentID)
+        const uniqueExercises = new Set();
+        (submissionsData || []).forEach((sub) => {
+          if (sub.AssignmentID) uniqueExercises.add(sub.AssignmentID);
+        });
+        setCompletedExercisesCount(uniqueExercises.size);
+      } catch (err) {
+        console.warn('Could not load stats:', err);
+        setStatsError('Could not load your stats. Please refresh.');
+        // On met des valeurs par défaut pour ne pas casser l'UI
+        setEnrolledCoursesCount(0);
+        setCompletedExercisesCount(0);
+      } finally {
+        setLoadingStats(false);
+      }
+    }
+    loadStats();
+  }, []);
+
   const handleLogout = async () => {
     try {
       await signOut();
@@ -64,21 +125,32 @@ function StudentProfile() {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
 
-  // Navigation : Profile (actif), My Courses (lie vers /courses), Help
   const navItems = [
     { label: 'Profile', icon: <UserIcon />, active: true, disabled: false, onClick: undefined },
     { label: 'My Courses', icon: <BookIcon />, active: false, disabled: false, onClick: () => navigate('/courses') },
-    { label: 'Help', icon: <HelpIcon />, active: false, disabled: true, onClick: undefined },
-  ];
+{ label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },  ];
 
-  // Statistiques (inchangées)
+  const getInitials = () => {
+    const first = firstName.charAt(0).toUpperCase();
+    const last = lastName.charAt(0).toUpperCase();
+    return first + last || '?';
+  };
+
+  // Construction des statistiques à afficher (seulement deux cartes)
   const stats = [
-    { label: 'Enrolled Courses', value: '3 Courses', icon: <BookIcon /> },
-    { label: 'Completed Exercises', value: '42 Exercises', icon: <CapIcon /> },
-    { label: 'Avg Solution Attempts', value: '1.8 Attempts', icon: <CapIcon /> },
+    {
+      label: 'Enrolled Courses',
+      value: loadingStats ? '...' : (statsError ? '—' : `${enrolledCoursesCount} Course${enrolledCoursesCount !== 1 ? 's' : ''}`),
+      icon: <BookIcon />,
+    },
+    {
+      label: 'Completed Exercises',
+      value: loadingStats ? '...' : (statsError ? '—' : `${completedExercisesCount} Exercise${completedExercisesCount !== 1 ? 's' : ''}`),
+      icon: <CapIcon />,
+    },
   ];
 
-  // Cartes d'information
+  // Cartes d'information (on garde Role et Platform, on retire Notifications)
   const infoCards = [
     {
       id: 'role',
@@ -94,22 +166,7 @@ function StudentProfile() {
       icon: <CapIcon />,
       clickable: false,
     },
-    {
-      id: 'notifications',
-      label: 'Notifications',
-      value: 'View all',
-      icon: <BellIcon />,
-      clickable: true,
-      onClick: () => alert('Coming soon: notifications page'),
-    },
   ];
-
-  // Génération des initiales (ex: "LR")
-  const getInitials = () => {
-    const first = firstName.charAt(0).toUpperCase();
-    const last = lastName.charAt(0).toUpperCase();
-    return first + last || '?';
-  };
 
   return (
     <div style={styles.page}>
@@ -123,7 +180,6 @@ function StudentProfile() {
         onLogout={handleLogout}
       />
 
-      {/* Contenu principal */}
       <main style={styles.main}>
         <header style={styles.header}>
           <div style={styles.headerLeft}>
@@ -133,15 +189,13 @@ function StudentProfile() {
             <h1 style={styles.pageTitle}>My Profile</h1>
           </div>
           <div style={styles.headerIcons}>
-            <span style={styles.headerIconButton}><BellIcon /></span>
-            <span style={styles.headerIconButton}><SettingsIcon /></span>
-            <span style={styles.avatarCircle}>
+            <NotificationBell />
+<span style={styles.headerIconButton} onClick={() => navigate('/settings')}><SettingsIcon /></span>            <span style={styles.avatarCircle}>
               {loadingProfile ? '...' : getInitials()}
             </span>
           </div>
         </header>
 
-        {/* Carte de profil */}
         <div style={styles.profileCard}>
           <span style={styles.profileAvatar}>
             {loadingProfile ? '...' : getInitials()}
@@ -156,7 +210,10 @@ function StudentProfile() {
           </div>
         </div>
 
-        {/* Statistiques */}
+        {statsError && (
+          <div style={styles.errorBanner}>{statsError}</div>
+        )}
+
         <div style={styles.statsRow}>
           {stats.map((stat) => (
             <div key={stat.label} style={styles.statCard}>
@@ -169,7 +226,6 @@ function StudentProfile() {
           ))}
         </div>
 
-        {/* Cartes d'information */}
         <h3 style={styles.sectionTitle}>Information</h3>
         <div style={styles.infoGrid}>
           {infoCards.map((card) => (
@@ -192,7 +248,6 @@ function StudentProfile() {
   );
 }
 
-// Styles (sidebar retiré -- vit maintenant dans Sidebar.jsx)
 const styles = {
   page: {
     minHeight: '100vh',
@@ -301,7 +356,20 @@ const styles = {
     alignItems: 'center',
     gap: '0.35rem',
   },
-  statsRow: { display: 'flex', gap: '1rem', marginBottom: '2rem' },
+  errorBanner: {
+    backgroundColor: '#fee2e2',
+    border: '1px solid #fecaca',
+    color: '#991b1b',
+    borderRadius: '10px',
+    padding: '0.8rem 1rem',
+    fontSize: '0.85rem',
+    marginBottom: '1.2rem',
+  },
+  statsRow: {
+    display: 'flex',
+    gap: '1rem',
+    marginBottom: '2rem',
+  },
   statCard: {
     flex: 1,
     backgroundColor: '#fff',
@@ -318,7 +386,7 @@ const styles = {
   sectionTitle: { fontSize: '1rem', color: '#333', marginBottom: '0.8rem' },
   infoGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
+    gridTemplateColumns: 'repeat(2, 1fr)',
     gap: '1rem',
   },
   infoCard: {

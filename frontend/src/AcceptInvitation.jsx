@@ -7,6 +7,11 @@ import {
   getInvitationByToken, acceptInvitation, declineInvitation,
   attachEmailToInvitation,
 } from './Mockenrollments';
+import {
+  getNotificationByToken,
+  markNotificationActioned,
+  markNotificationRead,
+} from './MockNotifications';
 
 function AcceptInvitation() {
   const [searchParams] = useSearchParams();
@@ -30,7 +35,7 @@ function AcceptInvitation() {
         if (cancelled) return;
         setIsAuthenticated(true);
 
-        // NEW: if this is a generic shareable link (email was still null),
+        // if this is a generic shareable link (email was still null),
         // attach the signed-in student's real email now, so the
         // instructor sees who actually used the link instead of a
         // "Shareable link" / "Awaiting student access" placeholder.
@@ -52,12 +57,26 @@ function AcceptInvitation() {
     acceptInvitation(token);
     setInvitation((prev) => ({ ...prev, status: 'accepted' }));
     setActionState('accepted');
+
+    // Mark corresponding notification as actioned/read
+    const notif = getNotificationByToken(token);
+    if (notif) {
+      markNotificationActioned(notif.id);
+      markNotificationRead(notif.id);
+    }
   };
 
   const handleDecline = () => {
     declineInvitation(token);
     setInvitation((prev) => ({ ...prev, status: 'declined' }));
     setActionState('declined');
+
+    // Mark corresponding notification as actioned/read
+    const notif = getNotificationByToken(token);
+    if (notif) {
+      markNotificationActioned(notif.id);
+      markNotificationRead(notif.id);
+    }
   };
 
   const goToLogin = () => {

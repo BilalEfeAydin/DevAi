@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { NAVY, NAVY_DARK } from './Theme';
 import { BookIcon, ArrowIcon, CapIcon } from './Icons';
+import NotificationBell from './NotificationBell';
 
 const API_BASE_URL = 'https://lfass4s0ll.execute-api.us-east-1.amazonaws.com';
 
@@ -42,7 +43,6 @@ function CoursePicker() {
         if (!res.ok) return;
 
         const items = await res.json();
-        // Map DynamoDB items to the shape the UI expects
         const mapped = items.map((item) => ({
           id: item.CourseID,
           title: item.Title || item.CourseID,
@@ -63,7 +63,7 @@ function CoursePicker() {
   const selectedCourse = courses.find((c) => c.id === selectedId) || null;
 
   const handleCardClick = (course) => {
-    if (course.status === 'pending') return; // not accepted yet -- can't select
+    if (course.status === 'pending') return;
     setSelectedId(course.id);
   };
 
@@ -83,9 +83,12 @@ function CoursePicker() {
           <span style={{ transform: 'rotate(180deg)', display: 'flex' }}><ArrowIcon /></span>
           Back to Profile
         </button>
-        <div style={styles.brandRow}>
-          <span style={styles.capIcon}><CapIcon /></span>
-          <span style={styles.brandText}>DevAI</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <NotificationBell />
+          <div style={styles.brandRow}>
+            <span style={styles.capIcon}><CapIcon /></span>
+            <span style={styles.brandText}>DevAI</span>
+          </div>
         </div>
       </header>
 
