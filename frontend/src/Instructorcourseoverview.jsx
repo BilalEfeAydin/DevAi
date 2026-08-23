@@ -56,6 +56,7 @@ const inviteCSS = `
   }
 `;
 
+
 function InstructorCourseOverview() {
   const navigate = useNavigate();
   const location = useLocation();
