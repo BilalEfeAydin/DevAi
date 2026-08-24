@@ -1,49 +1,87 @@
 // NotificationBell.jsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchUserAttributes } from 'aws-amplify/auth';
+import { fetchUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
 import { NAVY } from './Theme';
 import { BellIcon } from './Icons';
-import {
-  getNotificationsForStudent,
-  markNotificationRead,
-  markNotificationActioned,
-} from './MockNotifications';
-import { acceptInvitation, declineInvitation, getExerciseById, getCourseInfo } from './Mockenrollments';
+
+const API_BASE_URL = 'https://lfass4s0ll.execute-api.us-east-1.amazonaws.com';
 
 function NotificationBell() {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [email, setEmail] = useState('');
+  const [studentSub, setStudentSub] = useState('');
   const [loading, setLoading] = useState(true);
   const dropdownRef = useRef(null);
+  // Track locally dismissed/actioned items (since backend has no "read" field)
+  const [dismissed, setDismissed] = useState(new Set());
+  const [actioned, setActioned] = useState(new Set());
 
-  // Load current user email
+  // Fetch pending invitations from the real API
+  const fetchInvitations = useCallback(async (sub) => {
+    try {
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken?.toString();
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE_URL}/enrollments?studentId=${sub}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        console.warn('[NotificationBell] Failed to fetch enrollments:', res.status);
+        return;
+      }
+
+      const data = await res.json();
+      const enrollments = data.enrollments || [];
+
+      // Map enrollment items to notification-like objects
+      const notifs = enrollments
+        .filter((e) => e.Status === 'invited')
+        .map((e) => ({
+          id: `${e.CourseID}_${e.StudentID}`,
+          type: 'invitation',
+          courseId: e.CourseID,
+          courseTitle: e.CourseTitle || 'Course',
+          instructorName: e.InstructorName || 'Instructor',
+          createdAt: e.CreatedAt,
+          read: dismissed.has(`${e.CourseID}_${e.StudentID}`),
+          actioned: actioned.has(`${e.CourseID}_${e.StudentID}`),
+        }))
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      setNotifications(notifs);
+    } catch (err) {
+      console.warn('[NotificationBell] Error fetching invitations:', err);
+    }
+  }, [dismissed, actioned]);
+
+  // Load user sub and initial invitations
   useEffect(() => {
-    async function loadEmail() {
+    async function init() {
       try {
         const attrs = await fetchUserAttributes();
-        const userEmail = attrs.email || '';
-        setEmail(userEmail);
-        console.log('[NotificationBell] Student email from Cognito:', userEmail);
+        const sub = attrs.sub || '';
+        setStudentSub(sub);
+        console.log('[NotificationBell] Student sub from Cognito:', sub);
+        if (sub) await fetchInvitations(sub);
       } catch (err) {
-        console.warn('Could not fetch user email for notifications:', err);
+        console.warn('Could not load user for notifications:', err);
       } finally {
         setLoading(false);
       }
     }
-    loadEmail();
-  }, []);
+    init();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load notifications when email is set
+  // Poll for new invitations every 30 seconds
   useEffect(() => {
-    if (email) {
-      const notifs = getNotificationsForStudent(email);
-      console.log('[NotificationBell] Notifications for', email, ':', notifs);
-      setNotifications(notifs);
-    }
-  }, [email]);
+    if (!studentSub) return;
+    const interval = setInterval(() => fetchInvitations(studentSub), 30000);
+    return () => clearInterval(interval);
+  }, [studentSub, fetchInvitations]);
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -56,37 +94,56 @@ function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read && !n.actioned).length;
 
   const toggleDropdown = () => setIsOpen(!isOpen);
 
   const handleDismiss = (notifId) => {
-    markNotificationRead(notifId);
+    setDismissed((prev) => new Set(prev).add(notifId));
     setNotifications((prev) =>
       prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
     );
   };
 
-  const handleAcceptInvite = (notif) => {
+  const handleAcceptInvite = async (notif) => {
     if (notif.actioned) return;
-    const token = notif.token;
-    acceptInvitation(token);
-    markNotificationActioned(notif.id);
-    markNotificationRead(notif.id);
-    setNotifications((prev) =>
-      prev.map((n) =>
-        n.id === notif.id ? { ...n, actioned: true, read: true } : n
-      )
-    );
-    navigate('/courses');
+    try {
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken?.toString();
+
+      const res = await fetch(`${API_BASE_URL}/enrollments/accept`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ courseId: notif.courseId }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error('Accept failed:', data.message);
+        return;
+      }
+
+      setActioned((prev) => new Set(prev).add(notif.id));
+      setDismissed((prev) => new Set(prev).add(notif.id));
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.id === notif.id ? { ...n, actioned: true, read: true } : n
+        )
+      );
+      navigate('/courses');
+    } catch (err) {
+      console.error('Accept invite error:', err);
+    }
   };
 
   const handleDeclineInvite = (notif) => {
     if (notif.actioned) return;
-    const token = notif.token;
-    declineInvitation(token);
-    markNotificationActioned(notif.id);
-    markNotificationRead(notif.id);
+    // For now, just dismiss locally (no backend decline endpoint)
+    setActioned((prev) => new Set(prev).add(notif.id));
+    setDismissed((prev) => new Set(prev).add(notif.id));
     setNotifications((prev) =>
       prev.map((n) =>
         n.id === notif.id ? { ...n, actioned: true, read: true } : n
@@ -94,37 +151,8 @@ function NotificationBell() {
     );
   };
 
-  const handleViewExercise = (notif) => {
-    const exercise = getExerciseById(notif.exerciseId);
-    const course = getCourseInfo(notif.courseId);
-    if (!exercise || !course) {
-      alert('Exercise or course not found.');
-      return;
-    }
-    markNotificationRead(notif.id);
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n))
-    );
-    navigate('/submission', {
-      state: {
-        courseId: notif.courseId,
-        courseTitle: course.title,
-        exerciseId: exercise.id,
-        exerciseTitle: exercise.title,
-        exerciseDescription: exercise.description,
-        exerciseBadge: exercise.badge,
-        maxAttempts: exercise.maxAttempts,
-        starterCode: exercise.starterCode,
-      },
-    });
-  };
-
-  // Refresh : recharge les notifications depuis le mock (ou plus tard depuis l'API)
   const refreshNotifications = () => {
-    if (email) {
-      const notifs = getNotificationsForStudent(email);
-      setNotifications(notifs);
-    }
+    if (studentSub) fetchInvitations(studentSub);
   };
 
   return (
@@ -198,22 +226,6 @@ function NotificationBell() {
                         ) : (
                           <div style={styles.actionedText}>✓ Responded</div>
                         )}
-                      </>
-                    )}
-                    {notif.type === 'new_exercise' && (
-                      <>
-                        <div style={styles.notifTitle}>
-                          New exercise available
-                        </div>
-                        <div style={styles.notifMessage}>
-                          <strong>{notif.exerciseTitle}</strong> is now open in {notif.courseTitle}.
-                        </div>
-                        <button
-                          onClick={() => handleViewExercise(notif)}
-                          style={styles.viewButton}
-                        >
-                          View Exercise
-                        </button>
                       </>
                     )}
                   </div>

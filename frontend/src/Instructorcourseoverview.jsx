@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
+import { signOut, fetchUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
+const API_BASE_URL = 'https://lfass4s0ll.execute-api.us-east-1.amazonaws.com';
 import { NAVY, NAVY_DARK } from './Theme';
 import Sidebar from './Sidebar';
 import {
@@ -225,17 +226,39 @@ function InstructorCourseOverview() {
       setEmailError('Please enter a valid email address.');
       return;
     }
-    if (invitations.some((inv) => inv.email === trimmed && inv.status === 'pending')) {
-      setEmailError('An invitation is already pending for this email.');
-      return;
-    }
 
     setSendingEmail(true);
     try {
-      sendInvitationByEmail(COURSE_ID, trimmed);
-      setInvitations(getInvitationsForCourse(COURSE_ID));
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken?.toString();
+
+      const res = await fetch(`${API_BASE_URL}/enrollments/invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ courseId: COURSE_ID, email: trimmed }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          setEmailError('No student found with this email.');
+        } else if (res.status === 409) {
+          setEmailError(data.message || 'This student is already invited or enrolled.');
+        } else {
+          setEmailError(data.message || 'Failed to send invitation.');
+        }
+        return;
+      }
+
       setConfirmationMessage(`Invitation sent to ${trimmed}`);
       setEmailInput('');
+    } catch (err) {
+      console.error('Invite error:', err);
+      setEmailError('Network error. Please try again.');
     } finally {
       setSendingEmail(false);
     }

@@ -83,7 +83,7 @@ public class ApiConstruct extends Construct {
 
         // GET /courses — reads courses from DynamoDB (by student enrollment or instructor ownership)
         this.getCoursesFn = Function.Builder.create(this, "GetCoursesFn")
-                .functionName("DevAi-GetCourses")
+                .functionName("DevAi-GetCoursesV2")
                 .runtime(Runtime.NODEJS_24_X)
                 .handler("index.handler")
                 .code(Code.fromAsset("src/main/java/controllers/getCourses"))
@@ -93,7 +93,7 @@ public class ApiConstruct extends Construct {
 
         // POST /courses — creates a course, uploads rules + honor code to S3
         this.postCourseFn = Function.Builder.create(this, "PostCourseFn")
-                .functionName("DevAi-PostCourse")
+                .functionName("DevAi-PostCourseV2")
                 .runtime(Runtime.NODEJS_24_X)
                 .handler("index.handler")
                 .code(Code.fromAsset("src/main/java/controllers/postCourse"))
