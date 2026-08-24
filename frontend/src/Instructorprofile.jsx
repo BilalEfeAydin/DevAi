@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchUserAttributes, signOut } from 'aws-amplify/auth';
+import { fetchUserAttributes, signOut, fetchAuthSession } from 'aws-amplify/auth';
+const API_BASE_URL = 'https://lfass4s0ll.execute-api.us-east-1.amazonaws.com';
+
 import { NAVY } from './Theme';
 import Sidebar from './Sidebar';
 import {
@@ -36,8 +38,10 @@ function InstructorProfile() {
   // Load profile and courses
   useEffect(() => {
     async function loadData() {
+      let sub = '';
       try {
         const attrs = await fetchUserAttributes();
+        sub = attrs.sub; // Needed for fetching courses
         const name = attrs.name || '';
         const family = attrs.family_name || '';
         setFirstName(name);
@@ -50,14 +54,33 @@ function InstructorProfile() {
         setLoadingProfile(false);
       }
 
-      // Load courses from mock store
-      // We need to import getAllCourses from mockEnrollments
-      try {
-        const allCourses = getAllCourses();
-        setCourses(allCourses);
-      } catch (err) {
-        console.warn('Could not load courses:', err);
-        setCourses([]);
+      // Load courses from real API
+      if (sub) {
+        try {
+          const session = await fetchAuthSession();
+          const token = session.tokens?.idToken?.toString();
+          
+          const res = await fetch(`${API_BASE_URL}/courses?instructorId=${sub}`, {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            }
+          });
+          
+          if (!res.ok) throw new Error(`Failed to fetch courses (${res.status})`);
+          const data = await res.json();
+          
+          // Map backend course structure to UI format
+          const formattedCourses = data.map(c => ({
+            id: c.CourseID,
+            title: c.Title,
+            instructor: c.InstructorName || 'Instructor',
+            color: '#1e2a78'
+          }));
+          setCourses(formattedCourses);
+        } catch (err) {
+          console.error('Could not fetch real courses:', err);
+          setCourses([]);
+        }
       }
     }
     loadData();
