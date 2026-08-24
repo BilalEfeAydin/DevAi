@@ -83,6 +83,13 @@ public class HostingConstruct extends Construct {
                                 .value("DevAi")
                                 .build()
                 ))
+                .customRules(java.util.List.of(
+                        CfnApp.CustomRuleProperty.builder()
+                                .source("</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>")
+                                .target("/index.html")
+                                .status("200")
+                                .build()
+                ))
                 .build();
 
         // =============================================
