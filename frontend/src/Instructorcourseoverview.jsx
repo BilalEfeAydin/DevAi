@@ -68,10 +68,21 @@ function InstructorCourseOverview() {
   const [lastName, setLastName] = useState('');
   const [loadingProfile, setLoadingProfile] = useState(true);
 
-  const course = getCourseInfo(COURSE_ID);
-  const details = getCourseDetails(COURSE_ID);
+  const mockCourse = getCourseInfo(COURSE_ID);
+  const course = mockCourse || { 
+    id: COURSE_ID, 
+    title: location.state?.courseTitle || 'Course Overview' 
+  };
+  
+  const mockDetails = getCourseDetails(COURSE_ID);
+  const details = mockDetails || {
+    description: 'This is a live course from the database.',
+    notions: ['Live Course'],
+    rules: ['Follow the honor code'],
+    tips: ['Keep your code clean']
+  };
 
-  const [invitations, setInvitations] = useState(() => getInvitationsForCourse(COURSE_ID));
+  const [invitations, setInvitations] = useState(() => getInvitationsForCourse(COURSE_ID) || []);
   const [emailInput, setEmailInput] = useState('');
   const [emailError, setEmailError] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -79,7 +90,7 @@ function InstructorCourseOverview() {
   const [shareableLink, setShareableLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
 
-  const [exercises, setExercises] = useState(() => getExercisesForCourse(COURSE_ID));
+  const [exercises, setExercises] = useState(() => getExercisesForCourse(COURSE_ID) || []);
 
   // Popup state
   const [viewingExercise, setViewingExercise] = useState(null);
@@ -196,7 +207,7 @@ function InstructorCourseOverview() {
     { label: 'Overview', icon: <BookIcon />, active: view === 'overview', disabled: false, onClick: () => { setView('overview'); closeSidebar(); } },
     { label: 'Students', icon: <UserIcon />, active: view === 'students', disabled: false, onClick: () => { setView('students'); closeSidebar(); } },
     { label: 'Exercises', icon: <CapIcon />, active: view === 'exercises', disabled: false, onClick: () => { setView('exercises'); closeSidebar(); } },
-{ label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },  ];
+    { label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },];
 
   const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
