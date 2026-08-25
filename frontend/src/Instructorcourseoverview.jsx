@@ -91,7 +91,7 @@ function InstructorCourseOverview() {
   const [shareableLink, setShareableLink] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
 
-  const [exercises, setExercises] = useState(() => getExercisesForCourse(COURSE_ID) || []);
+  const [exercises, setExercises] = useState([]);
 
   // Popup state
   const [viewingExercise, setViewingExercise] = useState(null);
@@ -105,6 +105,34 @@ function InstructorCourseOverview() {
       setView(location.state.initialView);
     }
   }, [location.state]);
+
+  // Load exercises from real API
+  useEffect(() => {
+    async function loadExercises() {
+      try {
+        const session = await fetchAuthSession();
+        const token = session.tokens?.idToken?.toString();
+        const res = await fetch(`${API_BASE_URL}/assignments?courseId=${COURSE_ID}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) return;
+        const items = await res.json();
+        const mapped = items.map((item) => ({
+          id: item.AssignmentID,
+          title: item.Title,
+          description: item.Description || '',
+          badge: item.Badge || 'General',
+          maxAttempts: item.MaxAttempts || 5,
+          starterCode: item.StarterCode || '',
+          createdAt: item.CreatedAt,
+        }));
+        setExercises(mapped);
+      } catch (err) {
+        console.warn('Could not load exercises:', err);
+      }
+    }
+    if (COURSE_ID) loadExercises();
+  }, [COURSE_ID]);
 
   useEffect(() => {
     async function loadProfile() {

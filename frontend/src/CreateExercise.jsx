@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { signOut, fetchUserAttributes } from 'aws-amplify/auth';
+import { signOut, fetchUserAttributes, fetchAuthSession } from 'aws-amplify/auth';
 import { NAVY, NAVY_DARK } from './Theme';
 import Sidebar from './Sidebar';
 import {
   BookIcon, CapIcon, BellIcon, HelpIcon,
   MenuIcon, SettingsIcon, UserIcon,
 } from './Icons';
-import { addExercise } from './Mockenrollments';
+
+const API_BASE_URL = 'https://lfass4s0ll.execute-api.us-east-1.amazonaws.com';
 
 function CreateExercise() {
   const navigate = useNavigate();
@@ -70,7 +71,7 @@ function CreateExercise() {
     { label: 'Exercises', icon: <CapIcon />, active: true, disabled: false, onClick: () => navigate(`/instructor/course-dashboard`, { state: { courseId: effectiveCourseId, courseTitle: effectiveCourseTitle } }) },
 { label: 'Help', icon: <HelpIcon />, active: false, disabled: false, onClick: () => navigate('/help') },  ];
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -89,21 +90,41 @@ function CreateExercise() {
     }
 
     try {
-      const newExercise = addExercise(effectiveCourseId, {
-        title: title.trim(),
-        description: description.trim(),
-        badge: badge.trim() || 'General',
-        maxAttempts: Number(maxAttempts),
-        starterCode: starterCode,
+      const session = await fetchAuthSession();
+      const token = session.tokens?.idToken?.toString();
+
+      const res = await fetch(`${API_BASE_URL}/assignments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          courseId: effectiveCourseId,
+          title: title.trim(),
+          description: description.trim(),
+          badge: badge.trim() || 'General',
+          maxAttempts: Number(maxAttempts),
+          starterCode: starterCode,
+        }),
       });
-      setSuccess(`Exercise "${newExercise.title}" created successfully!`);
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || 'Failed to create exercise.');
+        return;
+      }
+
+      setSuccess(`Exercise "${data.Title}" created successfully!`);
       setTimeout(() => {
         navigate(`/instructor/course-dashboard`, {
           state: { courseId: effectiveCourseId, courseTitle: effectiveCourseTitle, initialView: 'exercises' },
         });
       }, 1200);
     } catch (err) {
-      setError(err.message || 'Failed to create exercise.');
+      console.error('Create exercise error:', err);
+      setError('Network error. Please try again.');
     }
   };
 

@@ -4,6 +4,7 @@ import { DynamoDBDocumentClient, UpdateCommand, GetCommand } from "@aws-sdk/lib-
 const client = new DynamoDBClient({});
 const ddb = DynamoDBDocumentClient.from(client);
 const TABLE_NAME = process.env.TABLE_NAME || "DevAi-Enrollments";
+const COURSES_TABLE = process.env.COURSES_TABLE || "DevAi-Courses";
 
 export const handler = async (event) => {
   try {
@@ -33,6 +34,7 @@ export const handler = async (event) => {
 
     const now = new Date().toISOString();
 
+    // 1. Update enrollment status to "accepted"
     await ddb.send(new UpdateCommand({
       TableName: TABLE_NAME,
       Key: { CourseID: courseId, StudentID: studentId },
@@ -41,6 +43,18 @@ export const handler = async (event) => {
       ExpressionAttributeValues: {
         ":status": "accepted",
         ":updatedAt": now,
+      },
+    }));
+
+    // 2. Add student to the course's EnrolledStudents list in DevAi-Courses
+    //    This is what getCourses Lambda checks when filtering courses for a student.
+    await ddb.send(new UpdateCommand({
+      TableName: COURSES_TABLE,
+      Key: { CourseID: courseId },
+      UpdateExpression: "SET EnrolledStudents = list_append(if_not_exists(EnrolledStudents, :empty), :sid)",
+      ExpressionAttributeValues: {
+        ":sid": [studentId],
+        ":empty": [],
       },
     }));
 
