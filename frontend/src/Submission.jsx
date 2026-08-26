@@ -251,6 +251,18 @@ function Submission() {
       if (data.aiReview) {
         setAiReview(data.aiReview);
       }
+
+      if (submitForReview) {
+        setAttemptHistory((prev) => [
+          ...prev,
+          {
+            attemptNumber: prev.length + 1,
+            files: [{ id: 'main', name: 'main.py', content: code }],
+            feedback: data.aiReview || null,
+            timestamp: new Date().toISOString(),
+          }
+        ]);
+      }
     } catch (err) {
       console.error('Run Tests error:', err);
       setOutput({ status: 'error', message: err.message || 'Network error.' });
