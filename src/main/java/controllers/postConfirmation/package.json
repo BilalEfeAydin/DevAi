@@ -1,0 +1,11 @@
+{
+  "name": "devai-post-confirmation",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Cognito Post-Confirmation trigger — adds user to group and creates DynamoDB record",
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0"
+  }
+}

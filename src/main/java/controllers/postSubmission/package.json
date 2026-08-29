@@ -1,0 +1,10 @@
+{
+  "name": "devai-post-submission",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "DevAi postSubmission Lambda — saves student code, runs it in E2B sandbox, and reviews via Bedrock AI",
+  "dependencies": {
+    "@e2b/code-interpreter": "^1.0.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.0.0"
+  }
+}
