@@ -29,10 +29,14 @@ export const handler = async (event) => {
     // ── 0. Extract caller identity from JWT ──────────────────
     const claims = event.requestContext?.authorizer?.jwt?.claims || {};
     const callerSub = claims.sub;
-    const callerGroups = claims["cognito:groups"] || "";
+    const callerGroups = claims["cognito:groups"] || [];
 
     // Only instructors can create courses
-    if (!callerGroups.includes("instructor")) {
+    const isInstructor = Array.isArray(callerGroups) 
+      ? callerGroups.some(g => g.toLowerCase() === "instructor")
+      : typeof callerGroups === "string" && callerGroups.toLowerCase().includes("instructor");
+
+    if (!isInstructor) {
       return respond(403, { message: "Only instructors can create courses." });
     }
 
