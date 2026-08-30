@@ -83,7 +83,7 @@ function InstructorCourseOverview() {
     tips: ['Keep your code clean']
   };
 
-  const [invitations, setInvitations] = useState(() => getInvitationsForCourse(COURSE_ID) || []);
+  const [invitations, setInvitations] = useState([]);
   const [emailInput, setEmailInput] = useState('');
   const [emailError, setEmailError] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -132,6 +132,32 @@ function InstructorCourseOverview() {
       }
     }
     if (COURSE_ID) loadExercises();
+  }, [COURSE_ID]);
+
+  // Load enrollments (invitations) from real API
+  useEffect(() => {
+    async function loadEnrollments() {
+      try {
+        const session = await fetchAuthSession();
+        const token = session.tokens?.idToken?.toString();
+        const res = await fetch(`${API_BASE_URL}/enrollments?courseId=${COURSE_ID}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const enrollments = data.enrollments || [];
+        const mapped = enrollments.map((item) => ({
+          id: item.StudentID,
+          email: item.StudentEmail || item.StudentName || item.StudentID,
+          status: (item.Status || 'pending').toLowerCase(),
+          createdAt: item.CreatedAt || new Date().toISOString(),
+        }));
+        setInvitations(mapped);
+      } catch (err) {
+        console.warn('Could not load enrollments:', err);
+      }
+    }
+    if (COURSE_ID) loadEnrollments();
   }, [COURSE_ID]);
 
   useEffect(() => {
