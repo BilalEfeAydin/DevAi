@@ -1,6 +1,6 @@
 # DevAI
 
-**A Socratic AI code review platform that guides students to find and fix their own mistakes , instead of just handing them the answer.**
+**A Socratic AI code review platform that guides students to find and fix their own mistakes, instead of just handing them the answer.**
 
 Built for the Amazon University Engagement Program 5.0 mentorship track.
 
@@ -13,10 +13,6 @@ Built for the Amazon University Engagement Program 5.0 mentorship track.
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
 - [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Environment Configuration](#environment-configuration)
-  - [Running the App Locally](#running-the-app-locally)
 - [Live Demo & Demo Accounts](#live-demo--demo-accounts)
 - [User Guide](#user-guide)
   - [For Students](#for-students)
@@ -78,7 +74,7 @@ React (Amplify Hosting)
 ▼
 Amazon Cognito (Auth) ──► API Gateway (JWT Authorizer)
 │
-┌───────────────┼────────────────┐
+┌────────────────┼─────────────────┐
 ▼ ▼ ▼
 Lambda: Courses Lambda: Submissions Lambda: Users (Cognito trigger)
 │ │
@@ -91,68 +87,25 @@ E2B Sandbox (code execution)
 ▼
 Amazon Bedrock (AI review)
 
-Full infrastructure is defined as code in `/infra` (AWS CDK, Java) , see `DevAiStack.java` and its constructs (`DatabaseConstruct`, `StorageConstruct`, `ApiConstruct`, `AuthConstruct`, `HostingConstruct`).
 
 ## Getting Started
 
-### Prerequisites
+DevAI is already deployed and live , you don't need to install anything, clone the repo, or run it locally to try it out.
 
-You need the following installed locally to run the frontend:
+** Open the Website here: [https://main.d6x1f2oqlv9td.amplifyapp.com/]**
 
-- **Node.js** v18 or higher ([download here](https://nodejs.org/))
-- **npm** (comes bundled with Node.js)
-- **Git**
+Just open the link and log in with one of the demo accounts below to explore the platform as a student or as an instructor.
 
-You do **not** need an AWS account to try the app ,  the frontend is already configured to talk to our live, deployed backend (Cognito, API Gateway, Lambda, DynamoDB). You only need an AWS account/CDK if you intend to deploy your own copy of the infrastructure.
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/BilalEfeAydin/DevAi.git
-cd DevAi/frontend
-
-# Install dependencies
-npm install
-```
-
-### Environment Configuration
-
-The frontend is pre-configured in `frontend/src/amplifyConfig.js` to point to our deployed AWS resources (Cognito User Pool ID, Client ID, and API Gateway base URL). No `.env` file is required to run the app against our live backend.
-
-If you want to deploy your own copy of the infrastructure instead of using ours:
-
-1. You'll need **Java 17+**, **Maven**, and the **AWS CDK CLI** (`npm install -g aws-cdk`) in addition to Node.js.
-2. From the project root (not `frontend/`), run:
-```bash
-   npm install
-   cdk deploy
-```
-3. After deployment, CDK prints your new resource values in the terminal (e.g. `DevAiStack.ApiUrl`, Cognito pool details). Copy these into `frontend/src/amplifyConfig.js` to point the frontend at your own backend instead of ours.
-
-### Running the App Locally
-
-```bash
-npm run dev
-```
-
-The app will be available at `http://localhost:5173` by default.
-
-To build a production bundle:
-
-```bash
-npm run build
-```
+> Want to run your own copy locally or deploy your own infrastructure? The frontend is a standard Vite/React app (`npm install` + `npm run dev` from `frontend/`), and the infrastructure is defined as AWS CDK (Java) in the project root (`cdk deploy`). Reach out to the team if you'd like details on setting up your own AWS resources.
 
 ## Live Demo & Demo Accounts
-
 
 Two pre-configured demo accounts are available so you can explore both roles without signing up. Each account already has courses, exercises, and (for the student account) a pending course invitation set up, so you can see the full flow end-to-end.
 
 | Role | Email | Password |
 |---|---|---|
-| Student | `testDemoInstructor@mail.com` | `2abcdefG.` |
-| Instructor | `testDemoStudent@mail.com` | `1Abcdefg.` |
+| Student | `testDemoStudent@mail.com` | `1Abcdefg.` |
+| Instructor | `testDemoInstructor@mail.com` | `2abcdefG.` |
 
 > These accounts are for evaluation purposes only. Please don't change their passwords.
 
@@ -168,7 +121,7 @@ Two pre-configured demo accounts are available so you can explore both roles wit
    - **Run Tests** executes your code without using an attempt.
    - **Run & Submit** uses one attempt and sends your code for AI Socratic review.
 6. Read the AI reviewer's questions under **Socratic Inquiry** — they'll point you toward the issue without giving away the fix. Revise and resubmit until you pass or run out of attempts.
-7. Check the **bell icon** for notifications : you'll be notified of new course invitations and newly opened exercises. The demo student account has a pending invitation waiting to be accepted from there.
+7. Check the **bell icon** for notifications: you'll be notified of new course invitations and newly opened exercises. The demo student account has a pending invitation waiting to be accepted from there.
 8. Use the **past attempt tabs** above the editor to review any previous submission and its feedback.
 
 ### For Instructors
@@ -177,7 +130,7 @@ Two pre-configured demo accounts are available so you can explore both roles wit
 2. From your **Profile**, click **Register New Course** to create a new course:
    - Fill in the title and description.
    - Configure enforcement rules: naming conventions, function length/nesting limits, forbidden practices, and required patterns (e.g. docstrings, unit tests).
-   - Optionally upload a `.txt` Honor Code document : this becomes the source of truth the AI uses for honor code violations in that course.
+   - Optionally upload a `.txt` Honor Code document: this becomes the source of truth the AI uses for honor code violations in that course.
 3. Open a course and go to the **Students** tab to invite students:
    - Send an invite to a specific email, or
    - Generate a shareable link anyone can use to join.
@@ -212,19 +165,19 @@ DevAi/
 │
 └── test/java/com/myorg/ # CDK stack tests
 
-> Note: the CDK infrastructure (Java) and the Lambda function code (Node.js) live under the same `src/main/java/com/myorg/` tree , the Lambda folders (`controllers/`, `orchestrator/`) contain plain `.mjs` files bundled and deployed by the CDK constructs, they are not part of the Java build itself.
+> Note: the CDK infrastructure (Java) and the Lambda function code (Node.js) live under the same `src/main/java/com/myorg/` tree — the Lambda folders (`controllers/`, `orchestrator/`) contain plain `.mjs` files bundled and deployed by the CDK constructs; they are not part of the Java build itself.
 
 ## Team
 
 | Name | Role |
 |---|---|
 | Bilal | Backend, infrastructure (CDK/AWS deployment), API integration, demo presentation |
-| Ismail | Backend, Lambda functions , ApI Creation |
+| Ismail | Backend, Lambda functions, API creation |
 | Rouae | Frontend, UI/UX, final report |
 
 ## Acknowledgments
 
-This project was built as part of Amazon's **University Engagement Program 5.0** mentorship track. Thank you to our mentors for their guidance throughout the sprints.
+This project was built as part of Amazon's **University Engagement Program 5.0** mentorship track. Thank you to our mentor for their guidance throughout the sprints.
 
 ## License
 
