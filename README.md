@@ -140,32 +140,40 @@ Two pre-configured demo accounts are available so you can explore both roles wit
 
 ## Project Structure
 DevAi/
-├── cdk.json # CDK app entry config
-├── pom.xml # Maven config for CDK (Java)
-├── package.json # npm deps for CDK CLI
+├── cdk.json                    # CDK app entry config
+├── pom.xml                     # Maven config for CDK (Java)
+├── package.json                # npm deps for CDK CLI
 │
-├── frontend/ # React (Vite) application
-│ ├── index.html
-│ ├── vite.config.js
-│ ├── package.json
-│ └── src/ # pages, components, amplifyConfig.js
+├── frontend/                   # React (Vite) application
+│   ├── index.html
+│   ├── vite.config.js
+│   ├── package.json
+│   └── src/                    # pages, components, amplifyConfig.js
 │
 └── src/
-├── main/java/com/myorg/
-│ ├── DevAiApp.java # CDK app entry point
-│ ├── DevAiStack.java # Main stack, wires all constructs together
-│ └── constructs/ # Database, Storage, Api, Auth, Hosting
-│
-├── main/java/com/myorg/controllers/ # Lambda functions (Node.js)
-│ ├── getCourses/
-│ ├── getSubmission/
-│ ├── postConfirmation/ # Cognito post-confirmation trigger
-│ ├── postCourse/
-│ └── postSubmission/ # Code execution (E2B) + AI review (Bedrock)
-│
-└── test/java/com/myorg/ # CDK stack tests
+    └── main/java/
+        ├── com/myorg/
+        │   ├── DevAiApp.java          # CDK app entry point
+        │   ├── DevAiStack.java        # Main stack, wires all constructs together
+        │   └── constructs/
+        │       ├── ApiConstruct.java
+        │       ├── AuthConstruct.java
+        │       ├── DatabaseConstruct.java
+        │       ├── HostingConstruct.java
+        │       └── StorageConstruct.java
+        │
+        ├── controllers/               # Lambda functions (Node.js)
+        │   ├── getCourses/
+        │   ├── getSubmission/
+        │   ├── postConfirmation/      # Cognito post-confirmation trigger
+        │   ├── postCourse/
+        │   └── postSubmission/        # Code execution (E2B) + AI review (Bedrock)
+        │
+        └── orchestrator/
+            └── OrchestratorLambda/    # Stub reading Cognito JWT claims
+      
 
-> Note: the CDK infrastructure (Java) and the Lambda function code (Node.js) live under the same `src/main/java/com/myorg/` tree — the Lambda folders (`controllers/`, `orchestrator/`) contain plain `.mjs` files bundled and deployed by the CDK constructs; they are not part of the Java build itself.
+> Note: the CDK infrastructure (Java) and the Lambda function code (Node.js) live under the same `src/main/java/com/myorg/` tree , the Lambda folders (`controllers/`, `orchestrator/`) contain plain `.mjs` files bundled and deployed by the CDK constructs; they are not part of the Java build itself.
 
 ## Team
 
