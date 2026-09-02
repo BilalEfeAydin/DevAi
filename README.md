@@ -170,7 +170,7 @@ DevAi/
         │   └── postSubmission/        # Code execution (E2B) + AI review (Bedrock)
         │
         └── orchestrator/
-            └── OrchestratorLambda/    # Stub reading Cognito JWT claims
+           
       
 
 > Note: the CDK infrastructure (Java) and the Lambda function code (Node.js) live under the same `src/main/java/com/myorg/` tree , the Lambda folders (`controllers/`, `orchestrator/`) contain plain `.mjs` files bundled and deployed by the CDK constructs; they are not part of the Java build itself.
