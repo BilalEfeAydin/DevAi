@@ -140,36 +140,26 @@ Two pre-configured demo accounts are available so you can explore both roles wit
 
 ## Project Structure
 DevAi/
-├── cdk.json                    # CDK app entry config
-├── pom.xml                     # Maven config for CDK (Java)
-├── package.json                # npm deps for CDK CLI
-│
-├── frontend/                   # React (Vite) application
+├── cdk.json                  # CDK app entry config
+├── pom.xml                   # Maven config for CDK (Java)
+├── package.json              # npm deps for CDK CLI
+├── frontend/                 # React (Vite) application
 │   ├── index.html
 │   ├── vite.config.js
 │   ├── package.json
-│   └── src/                    # pages, components, amplifyConfig.js
-│
+│   └── src/                  # pages, components, amplifyConfig.js
 └── src/
-    └── main/java/
-        ├── com/myorg/
-        │   ├── DevAiApp.java          # CDK app entry point
-        │   ├── DevAiStack.java        # Main stack, wires all constructs together
-        │   └── constructs/
-        │       ├── ApiConstruct.java
-        │       ├── AuthConstruct.java
-        │       ├── DatabaseConstruct.java
-        │       ├── HostingConstruct.java
-        │       └── StorageConstruct.java
-        │
-        ├── controllers/               # Lambda functions (Node.js)
+    └── main/java/com/myorg/
+        ├── DevAiApp.java      # CDK app entry point
+        ├── DevAiStack.java    # Main stack, wires all constructs together
+        ├── constructs/        # Database, Storage, Api, Auth, Hosting
+        ├── controllers/       # Lambda functions (Node.js)
         │   ├── getCourses/
         │   ├── getSubmission/
-        │   ├── postConfirmation/      # Cognito post-confirmation trigger
+        │   ├── postConfirmation/  # Cognito post-confirmation trigger
         │   ├── postCourse/
-        │   └── postSubmission/        # Code execution (E2B) + AI review (Bedrock)
-        │
-        └── orchestrator/
+        │   └── postSubmission/    # Code execution (E2B) + AI review (Bedrock)
+        └── test/java/com/myorg/   # CDK stack tests
            
       
 
