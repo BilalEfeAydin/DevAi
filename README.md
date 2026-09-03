@@ -76,7 +76,7 @@ React (Amplify Hosting)
 Amazon Cognito (Auth) ──► API Gateway (JWT Authorizer)
 │
 ┌────────────────┼─────────────────┐
-▼ ▼ ▼
+▼                ▼                 ▼
 Lambda: Courses Lambda: Submissions Lambda: Users (Cognito trigger)
 │ │
 ▼ ▼
