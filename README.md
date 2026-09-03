@@ -69,6 +69,7 @@ Instructors can define custom coding rules per course (naming conventions, compl
 | Hosting | AWS Amplify |
 
 ## Architecture
+```
 React (Amplify Hosting)
 │
 ▼
@@ -86,7 +87,7 @@ E2B Sandbox (code execution)
 │
 ▼
 Amazon Bedrock (AI review)
-
+```
 
 ## Getting Started
 
@@ -139,29 +140,40 @@ Two pre-configured demo accounts are available so you can explore both roles wit
 5. Visit the **Dashboard** for an overview across all your courses: total courses, total students, weekly submission activity, and a **Needs Attention** list of recent submissions flagged as honor code violations or needing review.
 
 ## Project Structure
+```
 DevAi/
-├── cdk.json                  # CDK app entry config
-├── pom.xml                   # Maven config for CDK (Java)
-├── package.json              # npm deps for CDK CLI
-├── frontend/                 # React (Vite) application
+├── cdk.json                    # CDK app entry config
+├── pom.xml                     # Maven config for CDK (Java)
+├── package.json                # npm deps for CDK CLI
+│
+├── frontend/                   # React (Vite) application
 │   ├── index.html
 │   ├── vite.config.js
 │   ├── package.json
-│   └── src/                  # pages, components, amplifyConfig.js
+│   └── src/                    # pages, components, amplifyConfig.js
+│
 └── src/
-    └── main/java/com/myorg/
-        ├── DevAiApp.java      # CDK app entry point
-        ├── DevAiStack.java    # Main stack, wires all constructs together
-        ├── constructs/        # Database, Storage, Api, Auth, Hosting
-        ├── controllers/       # Lambda functions (Node.js)
+    └── main/java/
+        ├── com/myorg/
+        │   ├── DevAiApp.java          # CDK app entry point
+        │   ├── DevAiStack.java        # Main stack, wires all constructs together
+        │   └── constructs/
+        │       ├── ApiConstruct.java
+        │       ├── AuthConstruct.java
+        │       ├── DatabaseConstruct.java
+        │       ├── HostingConstruct.java
+        │       └── StorageConstruct.java
+        │
+        ├── controllers/               # Lambda functions (Node.js)
         │   ├── getCourses/
         │   ├── getSubmission/
-        │   ├── postConfirmation/  # Cognito post-confirmation trigger
+        │   ├── postConfirmation/      # Cognito post-confirmation trigger
         │   ├── postCourse/
-        │   └── postSubmission/    # Code execution (E2B) + AI review (Bedrock)
-        └── test/java/com/myorg/   # CDK stack tests
+        │   └── postSubmission/        # Code execution (E2B) + AI review (Bedrock)
+        │
+        └── orchestrator/
            
-      
+```
 
 > Note: the CDK infrastructure (Java) and the Lambda function code (Node.js) live under the same `src/main/java/com/myorg/` tree , the Lambda folders (`controllers/`, `orchestrator/`) contain plain `.mjs` files bundled and deployed by the CDK constructs; they are not part of the Java build itself.
 
